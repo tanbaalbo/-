@@ -4,10 +4,16 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
+import android.content.res.Configuration;
+import android.graphics.Color;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.view.View;
+import android.view.Window;
+import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -30,17 +36,23 @@ import java.net.URL;
  *  - bundledData       : 앱에 같이 넣은 assets/data.json
  *  - isOnline          : 인터넷 연결 여부
  *  - fetchData         : GitHub의 data.json을 받아 window.onDataFetched(글) / window.onDataFetchFailed(이유)로 돌려줌
+ *  - isSystemDark      : 휴대폰이 다크 모드인지 (계산기의 "자동" 화면 모드가 이걸 따라감)
+ *  - setDarkStatusBar  : 위쪽 상태 표시줄 색을 계산기 바탕색에 맞춤
  */
 public class MainActivity extends Activity {
     static final String DATA_URL = "https://raw.githubusercontent.com/tanbaalbo/vacation_calculator/main/data.json";
     static final String STORE_FILE = "data_store.json";
+    static final int BG_LIGHT = 0xFFF1F4F7, BG_DARK = 0xFF0D151E;   // 계산기 CSS의 --bg 색
 
     private WebView web;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        boolean dark = isSystemDark();
+        applyBars(dark);
         web = new WebView(this);
+        web.setBackgroundColor(dark ? BG_DARK : BG_LIGHT);   // 켤 때 흰 화면이 번쩍이지 않게
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);      // 입력값 기억(localStorage)
@@ -69,7 +81,49 @@ public class MainActivity extends Activity {
         super.onDestroy();
     }
 
+    /** 휴대폰 다크 모드가 바뀌면(매니페스트 configChanges에 uiMode) 계산기에 알려 준다 */
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        if (web != null) web.evaluateJavascript("window.onSystemTheme && window.onSystemTheme()", null);
+    }
+
+    boolean isSystemDark() {
+        try {
+            int mode = getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
+            return mode == Configuration.UI_MODE_NIGHT_YES;
+        } catch (Exception e) { return false; }
+    }
+
+    /** 상태 표시줄·아래 버튼 줄 색을 계산기 바탕색에 맞추고, 밝은 바탕이면 아이콘을 어둡게 */
+    void applyBars(boolean dark) {
+        try {
+            Window w = getWindow();
+            w.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+            w.setStatusBarColor(dark ? BG_DARK : BG_LIGHT);
+            w.setNavigationBarColor(dark ? BG_DARK : BG_LIGHT);
+            View decor = w.getDecorView();
+            int f = decor.getSystemUiVisibility();
+            int lightStatus = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;        // API 23
+            int lightNav = 0x00000010;                                    // SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR (API 26)
+            if (dark) f &= ~(lightStatus | lightNav);
+            else { f |= lightStatus; if (Build.VERSION.SDK_INT >= 26) f |= lightNav; }
+            decor.setSystemUiVisibility(f);
+            if (web != null) web.setBackgroundColor(dark ? BG_DARK : BG_LIGHT);
+        } catch (Exception e) { }
+    }
+
     class Bridge {
+        @JavascriptInterface
+        public boolean isSystemDark() {
+            return MainActivity.this.isSystemDark();
+        }
+
+        @JavascriptInterface
+        public void setDarkStatusBar(final boolean dark) {
+            runOnUiThread(new Runnable() { public void run() { applyBars(dark); } });
+        }
+
         @JavascriptInterface
         public String loadData() {
             return readFile(new File(getFilesDir(), STORE_FILE));

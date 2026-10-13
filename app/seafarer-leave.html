@@ -51,6 +51,14 @@ header { display: grid; gap: 6px; }
   font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.08em;
   color: var(--accent); text-transform: uppercase;
 }
+.topline { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; }
+/* 화면 모드 (자동·밝게·어둡게) */
+.theme { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 2px; background: var(--surface); }
+.theme button {
+  font: inherit; font-size: 12px; font-weight: 500; color: var(--muted); background: transparent; border: 0;
+  padding: 4px 11px; border-radius: 999px; cursor: pointer; line-height: 1.4;
+}
+.theme button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
 h1 { margin: 0; font-size: 1.75rem; line-height: 1.25; font-weight: 700; text-wrap: balance; }
 h2 { margin: 0; font-size: 1.05rem; font-weight: 700; }
 .lede { margin: 0; color: var(--muted); max-width: 60ch; }
@@ -61,26 +69,28 @@ h2 { margin: 0; font-size: 1.05rem; font-weight: 700; }
   border-radius: var(--radius);
 }
 
-/* 입력 */
-.inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+/* 입력: 승선일 · 하선일 · 근속 연수 (넓으면 한 줄, 중간이면 근속은 아래 줄, 좁으면 세로) */
+.inputs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(10em, 0.7fr); gap: 0; }
 .field { display: grid; gap: 6px; padding: 16px 18px; min-width: 0; align-content: start; }
 .field + .field { border-left: 1px solid var(--line); }
+.field.tenure .unit { max-width: 11em; }
 .field label { font-size: 13px; font-weight: 500; color: var(--muted); display: flex; gap: 8px; align-items: baseline; }
 .field label .code { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; color: var(--accent); }
 .hint { font-size: 12px; color: var(--muted); min-height: 1.2em; }
-.row { display: flex; gap: 8px; align-items: center; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }   /* 자리가 모자라면 옆 버튼이 아래로 내려감 (잘리지 않게) */
+.row > input { flex: 1 1 9em; }
 input[type="date"], input[type="number"], input[type="text"], select, textarea {
   font: inherit; color: var(--ink); background: var(--surface);
   border: 1px solid var(--line); border-radius: 8px;
-  height: 44px; padding: 0 10px; width: 100%; min-width: 0;
+  min-height: 44px; height: auto; padding: 6px 10px; width: 100%; min-width: 0;   /* 폰 글자 크기를 키워도 글자가 잘리지 않게 높이는 늘어남 */
 }
 input[type="date"] { font-family: var(--font-mono); font-size: 16px; }
-textarea { height: auto; min-height: 76px; padding: 8px 10px; font-family: var(--font-mono); font-size: 13px; resize: vertical; }
+textarea { min-height: 76px; padding: 8px 10px; font-family: var(--font-mono); font-size: 13px; resize: vertical; }
 input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, summary:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
 .clear {
-  flex: none; height: 44px; padding: 0 12px; border-radius: 8px;
+  flex: none; min-height: 44px; padding: 0 12px; border-radius: 8px;
   border: 1px solid var(--line); background: transparent; color: var(--muted);
   font: inherit; font-size: 13px; cursor: pointer;
 }
@@ -118,7 +128,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 
 /* 승무 기간 띠 */
 .track-wrap { display: grid; gap: 6px; }
-.track-head { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+.track-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; font-size: 12px; color: var(--muted); }
+.track-head span { white-space: nowrap; }
 .track { position: relative; height: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
 .fill { position: absolute; inset: 0 auto 0 0; background: var(--ink); opacity: 0.85; }
 .tick { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line); }
@@ -127,7 +138,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .ticks span { position: absolute; transform: translateX(-100%); padding-right: 2px; font-variant-numeric: tabular-nums; }
 .ticks span.eight { color: var(--accent); font-weight: 600; }
 
-dl.facts { margin: 0; display: grid; grid-template-columns: 1fr auto; gap: 8px 16px; align-items: center; }
+dl.facts { margin: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 16px; align-items: center; }
 dl.facts dt { font-size: 13px; color: var(--muted); }
 dl.facts dd { margin: 0; font-family: var(--font-mono); font-size: 14px; font-variant-numeric: tabular-nums; text-align: right; display: flex; gap: 8px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
 .chip { font-family: var(--font-body); font-size: 11.5px; font-weight: 500; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
@@ -147,9 +158,11 @@ dl.facts dd { margin: 0; font-family: var(--font-mono); font-size: 14px; font-va
 /* 휴가 기간 */
 .leave { padding: 18px; display: grid; gap: 16px; }
 .leave-top { display: flex; flex-wrap: wrap; gap: 16px 24px; align-items: flex-end; justify-content: space-between; }
-.leave-inputs { display: flex; flex-wrap: wrap; gap: 12px 14px; align-items: flex-start; flex: 1 1 320px; min-width: 0; }
-.leave-start { display: grid; gap: 6px; flex: 1 1 220px; max-width: 300px; min-width: 0; }
-.leave-edu { display: grid; gap: 6px; flex: 0 1 120px; min-width: 0; }
+/* 글자 크기에 따라 같이 늘어나도록 em 단위. 좁은 화면(폴드 바깥 화면 등)에서는 교육 칸이 다음 줄로 내려감 */
+.leave-inputs { display: flex; flex-wrap: wrap; gap: 12px 14px; align-items: flex-start; flex: 1 1 20em; min-width: 0; }
+.leave-start { display: grid; gap: 6px; flex: 1 1 14em; max-width: 20em; min-width: 0; }
+.leave-edu { display: grid; gap: 6px; flex: 0 1 9em; min-width: 7.5em; }
+.leave-edu .unit { max-width: 9em; }
 .leave-start label, .leave-edu label { font-size: 13px; font-weight: 500; color: var(--muted); }
 .leave-end { display: grid; gap: 2px; text-align: right; }
 .leave-end .val { font-family: var(--font-mono); font-size: clamp(1.5rem, 6vw, 2rem); font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
@@ -258,8 +271,9 @@ details.settings[open] summary::after { content: "－"; }
 .wage-edit-wrap { overflow-x: auto; }
 .wage-edit { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .wage-edit th { text-align: left; font-size: 12px; font-weight: 500; color: var(--muted); padding: 4px 6px; border-bottom: 1px solid var(--line); }
-.wage-edit td { padding: 5px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; white-space: nowrap; }
-.wage-edit input { height: 38px; font-family: var(--font-mono); font-size: 14px; text-align: right; min-width: 120px; }
+.wage-edit td { padding: 5px 4px; border-bottom: 1px solid var(--line); vertical-align: middle; white-space: nowrap; }
+.wage-edit td:first-child { width: 1%; padding-right: 8px; }
+.wage-edit input { min-height: 38px; font-family: var(--font-mono); font-size: 14px; text-align: right; min-width: 6em; padding-inline: 6px; }
 .wage-edit tr.changed td:first-child { color: var(--warn); font-weight: 500; }
 .maxstep { display: flex; gap: 10px; align-items: center; font-size: 13px; color: var(--muted); }
 .maxstep input { width: 90px; font-family: var(--font-mono); }
@@ -268,9 +282,17 @@ details.settings[open] summary::after { content: "－"; }
 .basis p { margin: 0; }
 .basis b { color: var(--ink); font-weight: 500; }
 
+@media (max-width: 680px) {
+  .inputs { grid-template-columns: 1fr 1fr; }
+  .field.tenure { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); }
+}
 @media (max-width: 520px) {
   .inputs { grid-template-columns: 1fr; }
   .field + .field { border-left: 0; border-top: 1px solid var(--line); }
+  /* 좁은 화면(폴드 바깥 화면 등): 항목과 날짜를 위아래로 (옆으로 두면 글자가 세로로 끊김) */
+  dl.facts { grid-template-columns: 1fr; gap: 2px 0; }
+  dl.facts dt { margin-top: 8px; }
+  dl.facts dd { justify-content: flex-start; text-align: left; }
   .grid2 { grid-template-columns: 1fr; }
   .span, .leave-end { text-align: left; }
   .leave-start { max-width: none; }
@@ -287,7 +309,14 @@ details.settings[open] summary::after { content: "－"; }
 
 <main class="wrap">
   <header>
-    <div class="eyebrow">Work Rules Art. 35 · CBA Art. 15</div>
+    <div class="topline">
+      <div class="eyebrow">Work Rules Art. 35 · CBA Art. 15</div>
+      <div class="theme" role="group" aria-label="화면 모드">
+        <button type="button" data-mode="auto" aria-pressed="true">자동</button>
+        <button type="button" data-mode="light" aria-pressed="false">밝게</button>
+        <button type="button" data-mode="dark" aria-pressed="false">어둡게</button>
+      </div>
+    </div>
     <h1>선원 유급휴가 계산기</h1>
     <p class="lede">승선일과 하선일을 넣으면 회사 취업규칙·단체협약 기준으로 유급휴가 일수, 빨간날을 더한 휴가 기간, 차기 승선일에 받는 조기승선 수당이 바로 계산됩니다.</p>
   </header>
@@ -305,6 +334,11 @@ details.settings[open] summary::after { content: "－"; }
         <button type="button" class="clear" id="clearOff">비우기</button>
       </div>
       <div class="hint" id="offHint">비워 두면 오늘까지로 계산</div>
+    </div>
+    <div class="field tenure">
+      <label for="years">근속 연수 <span class="code">근속 가산</span></label>
+      <div class="unit yrs"><input type="number" id="years" min="0" max="50" step="1" placeholder="0" inputmode="numeric"></div>
+      <div class="hint">회사 근속 2년 이상이면 1년 넘는 연수마다 1일 추가</div>
     </div>
   </section>
 
@@ -461,11 +495,6 @@ details.settings[open] summary::after { content: "－"; }
           <span class="lbl">보상휴가</span>
           <label class="check"><input type="checkbox" id="compOn" checked><span>만 6개월 넘게 탔으면 이후 매월 1일 추가</span></label>
           <span class="help">본인이 원해서 6개월 넘게 승선했으면 끄세요 (단체협약 15조의1)</span>
-        </div>
-        <div class="sfield">
-          <label for="years">회사 계속 근로 연수 (근속 가산)</label>
-          <div class="unit yrs"><input type="number" id="years" min="0" max="50" step="1" placeholder="0" inputmode="numeric"></div>
-          <span class="help">2년 이상이면 1년을 넘는 연수마다 1일 추가 (취업규칙 35조 5항)</span>
         </div>
         <div class="sfield">
           <span class="lbl">승선기간 세는 법</span>
@@ -888,6 +917,39 @@ function onDataFetchFailed(msg) {
 }
 if (typeof window !== 'undefined') { window.onDataFetched = onDataFetched; window.onDataFetchFailed = onDataFetchFailed; }
 
+/* ---------- 화면 모드 (자동 = 폰 설정 따라감 / 밝게 / 어둡게) ---------- */
+var THEME_KEY = 'seafarer-leave-calc.theme';
+var themeMode = 'auto';
+function systemDark() {
+  if (APP && typeof APP.isSystemDark === 'function') { try { return !!APP.isSystemDark(); } catch (e) {} }   /* 앱: 안드로이드 설정 */
+  try { return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches); } catch (e) { return false; }
+}
+function applyTheme() {
+  var dark = themeMode === 'dark' || (themeMode === 'auto' && systemDark());
+  var root = document.documentElement;
+  if (themeMode === 'auto' && !APP) root.removeAttribute('data-theme');   /* 웹은 CSS가 폰 설정을 직접 따라감 */
+  else root.setAttribute('data-theme', dark ? 'dark' : 'light');
+  var btns = document.querySelectorAll('.theme button');
+  for (var i = 0; i < btns.length; i++) btns[i].setAttribute('aria-pressed', btns[i].getAttribute('data-mode') === themeMode ? 'true' : 'false');
+  if (APP && typeof APP.setDarkStatusBar === 'function') { try { APP.setDarkStatusBar(dark); } catch (e) {} }   /* 앱 위쪽 상태 표시줄 색 */
+}
+function setThemeMode(mode) {
+  themeMode = mode === 'light' || mode === 'dark' ? mode : 'auto';
+  try { localStorage.setItem(THEME_KEY, themeMode); } catch (e) {}
+  applyTheme();
+}
+function initTheme() {
+  try { var t = localStorage.getItem(THEME_KEY); if (t === 'light' || t === 'dark') themeMode = t; } catch (e) {}
+  var btns = document.querySelectorAll('.theme button');
+  for (var i = 0; i < btns.length; i++) btns[i].addEventListener('click', function () { setThemeMode(this.getAttribute('data-mode')); });
+  try {
+    var mq = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
+    if (mq) { var onChange = function () { if (themeMode === 'auto') applyTheme(); }; if (mq.addEventListener) mq.addEventListener('change', onChange); else if (mq.addListener) mq.addListener(onChange); }
+  } catch (e) {}
+  applyTheme();
+}
+if (typeof window !== 'undefined') window.onSystemTheme = function () { if (themeMode === 'auto') applyTheme(); };   /* 앱: 폰 설정이 바뀌면 자바 쪽이 부름 */
+
 /* 자료가 바뀐 뒤 화면 다시 그리기 (직책 목록·호봉 목록·안내 문구·계산) */
 function refreshAfterData() {
   fillRanks();
@@ -1260,6 +1322,7 @@ function renderLeave(L, v, opts, cust, startDn) {
 }
 
 function init() {
+  initTheme();          /* 화면 모드 먼저 (어두운 화면에서 밝게 번쩍이지 않게) */
   initData();           /* 임금표·공휴일 자료 고르기 (기본 → 앱 내장 → 받아 둔 자료) */
   fillRanks();
   fillSteps(el('rank').value);
@@ -1296,7 +1359,7 @@ function init() {
     el('perMonth').value = DEFAULTS.perMonth; el('method').value = DEFAULTS.method;
     el('rounding').value = DEFAULTS.rounding; el('inclusive').checked = DEFAULTS.inclusive;
     el('addRed').checked = DEFAULTS.addRed; el('sundays').checked = DEFAULTS.sundays;
-    el('compOn').checked = DEFAULTS.compOn; el('years').value = DEFAULTS.years;
+    el('compOn').checked = DEFAULTS.compOn;   /* 근속 연수는 위 입력 칸으로 옮겨서 여기서 지우지 않음 */
     el('rateUnused').value = DEFAULTS.rateUnused;
     render();
   });
