@@ -325,7 +325,7 @@ details.settings[open] summary::after { content: "－"; }
   <section class="card inputs" aria-label="날짜 입력">
     <div class="field">
       <label for="son">승선일 <span class="code">S/ON</span></label>
-      <input type="date" id="son" value="2026-09-17">
+      <input type="date" id="son">
       <div class="hint">승선한 날</div>
     </div>
     <div class="field">
@@ -1063,12 +1063,17 @@ function readForm() {
   return v;
 }
 function save(v) {
-  try { var o = {}; FIELDS.forEach(function (id) { o[id] = v[id]; }); o.wageManual = wageManual; localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) {}
+  try { var o = {}; FIELDS.forEach(function (id) { o[id] = v[id]; }); o.wageManual = wageManual; o.noPresetSon = true; localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) {}
 }
 function load() {
   try {
     var raw = localStorage.getItem(KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      var o = JSON.parse(raw);
+      /* 예전 판은 승선일이 2026-09-17로 미리 들어가 있었음 → 저장된 그 값은 한 번만 지움 (직접 넣은 날짜는 그대로) */
+      if (!o.noPresetSon) { if (o.son === '2026-09-17') o.son = ''; o.noPresetSon = true; try { localStorage.setItem(KEY, JSON.stringify(o)); } catch (e2) {} }
+      return o;
+    }
     for (var i = 0; i < OLD_KEYS.length; i++) {        /* 이전 판: 날짜·직접 넣은 공휴일만 가져오고 기준은 새 기본값 */
       var old = localStorage.getItem(OLD_KEYS[i]);
       if (old) { old = JSON.parse(old); return { son: old.son, soff: old.soff, leaveStart: old.leaveStart, custom: old.custom }; }
