@@ -1,0 +1,1326 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>[hidden]{display:none!important}body{margin:0}</style></head><body><title>선원 유급휴가 계산기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap">
+<style>
+/* Layout: 한 장짜리 계산 카드 — 위에 승선·하선일, 가운데 결과(얕은 물 색 패널), 휴가 달력, 아래 계산 기준 */
+:root {
+  --bg: #F1F4F7;
+  --surface: #FFFFFF;
+  --ink: #13233A;
+  --muted: #56677B;
+  --line: #D2DBE4;
+  --water: #E2EEF5;
+  --accent: #B8235A;      /* 빨간날 · 해도 마젠타 */
+  --accent-soft: #F8E1EA;
+  --ok: #1E6B4A;
+  --ok-soft: #DDF0E6;
+  --warn: #8A5300;
+  --warn-soft: #FBEBD2;
+  --font-body: 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0D151E; --surface: #142030; --ink: #E3EBF3; --muted: #94A5B8; --line: #283A4E;
+    --water: #16303F; --accent: #F07AA4; --accent-soft: #3B1A27; --ok: #7FD3A8; --ok-soft: #173327;
+    --warn: #F0B15A; --warn-soft: #3A2A12; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0D151E; --surface: #142030; --ink: #E3EBF3; --muted: #94A5B8; --line: #283A4E;
+  --water: #16303F; --accent: #F07AA4; --accent-soft: #3B1A27; --ok: #7FD3A8; --ok-soft: #173327;
+  --warn: #F0B15A; --warn-soft: #3A2A12; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.6;
+  padding-inline: 16px;
+  padding-block: 28px 48px;
+}
+.wrap { max-width: 720px; margin: 0 auto; display: grid; gap: 20px; }
+
+header { display: grid; gap: 6px; }
+.eyebrow {
+  font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.08em;
+  color: var(--accent); text-transform: uppercase;
+}
+h1 { margin: 0; font-size: 1.75rem; line-height: 1.25; font-weight: 700; text-wrap: balance; }
+h2 { margin: 0; font-size: 1.05rem; font-weight: 700; }
+.lede { margin: 0; color: var(--muted); max-width: 60ch; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+/* 입력 */
+.inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+.field { display: grid; gap: 6px; padding: 16px 18px; min-width: 0; align-content: start; }
+.field + .field { border-left: 1px solid var(--line); }
+.field label { font-size: 13px; font-weight: 500; color: var(--muted); display: flex; gap: 8px; align-items: baseline; }
+.field label .code { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; color: var(--accent); }
+.hint { font-size: 12px; color: var(--muted); min-height: 1.2em; }
+.row { display: flex; gap: 8px; align-items: center; }
+input[type="date"], input[type="number"], input[type="text"], select, textarea {
+  font: inherit; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 8px;
+  height: 44px; padding: 0 10px; width: 100%; min-width: 0;
+}
+input[type="date"] { font-family: var(--font-mono); font-size: 16px; }
+textarea { height: auto; min-height: 76px; padding: 8px 10px; font-family: var(--font-mono); font-size: 13px; resize: vertical; }
+input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+.clear {
+  flex: none; height: 44px; padding: 0 12px; border-radius: 8px;
+  border: 1px solid var(--line); background: transparent; color: var(--muted);
+  font: inherit; font-size: 13px; cursor: pointer;
+}
+.clear:hover { color: var(--ink); border-color: var(--muted); }
+
+/* 결과 */
+.result {
+  background: var(--water);
+  border-radius: var(--radius);
+  padding: 22px 20px 20px;
+  display: grid; gap: 16px;
+}
+.headline { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 20px; }
+.big { display: grid; gap: 2px; }
+.label { font-size: 13px; font-weight: 500; color: var(--muted); }
+.big .num {
+  font-family: var(--font-mono); font-weight: 600; line-height: 1;
+  font-size: clamp(2.75rem, 11vw, 4.25rem); font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.big .num small { font-family: var(--font-body); font-size: 1.25rem; font-weight: 500; margin-left: 6px; letter-spacing: 0; }
+.span { display: grid; gap: 2px; text-align: right; }
+.span .val { font-family: var(--font-mono); font-size: 1.15rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.span .sub { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.formula {
+  font-family: var(--font-mono); font-size: 13px; line-height: 1.5;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+  padding: 10px 12px; overflow-x: auto; white-space: nowrap;
+}
+.status { font-size: 13px; color: var(--muted); margin: -6px 0 0; }
+.error, .warn-note {
+  font-size: 13.5px; color: var(--warn); background: var(--warn-soft);
+  border-radius: 8px; padding: 10px 12px; margin: 0;
+}
+
+/* 승무 기간 띠 */
+.track-wrap { display: grid; gap: 6px; }
+.track-head { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+.track { position: relative; height: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.fill { position: absolute; inset: 0 auto 0 0; background: var(--ink); opacity: 0.85; }
+.tick { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line); }
+.tick.eight { width: 2px; background: var(--accent); }
+.ticks { position: relative; height: 16px; font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); }
+.ticks span { position: absolute; transform: translateX(-100%); padding-right: 2px; font-variant-numeric: tabular-nums; }
+.ticks span.eight { color: var(--accent); font-weight: 600; }
+
+dl.facts { margin: 0; display: grid; grid-template-columns: 1fr auto; gap: 8px 16px; align-items: center; }
+dl.facts dt { font-size: 13px; color: var(--muted); }
+dl.facts dd { margin: 0; font-family: var(--font-mono); font-size: 14px; font-variant-numeric: tabular-nums; text-align: right; display: flex; gap: 8px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
+.chip { font-family: var(--font-body); font-size: 11.5px; font-weight: 500; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+.chip.done { color: var(--ok); background: var(--ok-soft); }
+.chip.wait { color: var(--muted); background: var(--surface); border: 1px solid var(--line); }
+
+.actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.btn {
+  font: inherit; font-size: 14px; font-weight: 500; cursor: pointer;
+  height: 40px; padding: 0 16px; border-radius: 8px;
+  background: var(--ink); color: var(--surface); border: 1px solid var(--ink);
+}
+.btn:hover { opacity: 0.9; }
+.btn:disabled { opacity: 0.4; cursor: default; }
+.copy-fallback { flex: 1 1 260px; min-width: 0; font-family: var(--font-mono); font-size: 12px; height: 40px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); }
+
+/* 휴가 기간 */
+.leave { padding: 18px; display: grid; gap: 16px; }
+.leave-top { display: flex; flex-wrap: wrap; gap: 16px 24px; align-items: flex-end; justify-content: space-between; }
+.leave-inputs { display: flex; flex-wrap: wrap; gap: 12px 14px; align-items: flex-start; flex: 1 1 320px; min-width: 0; }
+.leave-start { display: grid; gap: 6px; flex: 1 1 220px; max-width: 300px; min-width: 0; }
+.leave-edu { display: grid; gap: 6px; flex: 0 1 120px; min-width: 0; }
+.leave-start label, .leave-edu label { font-size: 13px; font-weight: 500; color: var(--muted); }
+.leave-end { display: grid; gap: 2px; text-align: right; }
+.leave-end .val { font-family: var(--font-mono); font-size: clamp(1.5rem, 6vw, 2rem); font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.leave-end .sub { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.sum {
+  display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline;
+  font-family: var(--font-mono); font-size: 13.5px; font-variant-numeric: tabular-nums;
+  padding: 10px 12px; border-radius: 8px; background: var(--bg);
+}
+.sum .red { color: var(--accent); font-weight: 600; }
+.sum .muted { color: var(--muted); font-family: var(--font-body); font-size: 12.5px; }
+.holi-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.holi { font-size: 12px; padding: 2px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); white-space: nowrap; }
+.holi b { font-family: var(--font-mono); font-weight: 600; margin-right: 4px; }
+.holi.sun { background: transparent; border: 1px solid var(--accent-soft); }
+
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--muted); }
+.legend span { display: inline-flex; gap: 6px; align-items: center; }
+.sw { width: 14px; height: 14px; border-radius: 3px; display: inline-block; }
+.sw.on { background: var(--water); border: 1px solid var(--line); }
+.tick.six { width: 2px; background: var(--warn); }
+.ticks span.six { color: var(--warn); font-weight: 600; }
+.ticks span.eight { color: var(--accent); font-weight: 600; }
+.tick.four { width: 2px; background: var(--accent); }
+.ticks span.four { color: var(--accent); font-weight: 600; }
+.sw.redon { background: var(--accent-soft); }
+.sw.edge { border: 1.5px solid var(--ink); }
+.cal { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px 18px; }
+.month { display: grid; gap: 4px; align-content: start; min-width: 0; }
+.month h3 { margin: 0 0 2px; font-family: var(--font-mono); font-size: 13px; font-weight: 600; }
+.days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.wd { font-size: 10.5px; color: var(--muted); text-align: center; }
+.wd.sun { color: var(--accent); }
+.d {
+  font-family: var(--font-mono); font-size: 11.5px; text-align: center; line-height: 1;
+  padding: 6px 0; border-radius: 4px; color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.d.red { color: var(--accent); }
+.d.on { background: var(--water); color: var(--ink); }
+.d.on.red { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.d.edge { box-shadow: inset 0 0 0 1.5px var(--ink); }
+
+/* 조기승선 수당 */
+.pay { padding: 18px; display: grid; gap: 14px; }
+.pay-inputs { display: flex; flex-wrap: wrap; gap: 12px 16px; }
+.pfield { display: grid; gap: 6px; flex: 1 1 200px; max-width: 300px; min-width: 0; align-content: start; }
+.pfield.narrow { flex: 1 1 170px; max-width: 220px; }
+.pfield label { font-size: 13px; font-weight: 500; color: var(--muted); }
+.unit.won input { font-family: var(--font-mono); font-size: 16px; text-align: right; padding-right: 34px; }
+.unit.won::after { content: "원"; }
+.hint.manual { color: var(--warn); }
+.hint-row { display: flex; flex-wrap: wrap; gap: 2px 10px; align-items: baseline; }
+.linkbtn { font: inherit; font-size: 12px; font-weight: 500; color: var(--ink); background: none; border: 0; padding: 0; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.pay-total { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; padding: 14px 16px; border-radius: 8px; background: var(--water); }
+.pay-total .val { font-family: var(--font-mono); font-weight: 600; font-size: clamp(1.6rem, 7vw, 2.4rem); line-height: 1.1; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.pay-status { margin: -4px 0 0; font-size: 13px; color: var(--muted); }
+.pay-table-wrap { overflow-x: auto; }
+.pay-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.pay-table td:first-child { width: 28%; }
+.pay-table th { text-align: left; font-size: 12px; font-weight: 500; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.pay-table td { padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.pay-table td.calc { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pay-table .amt { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pay-table tr.total-row td { font-weight: 700; border-bottom: 0; border-top: 2px solid var(--ink); }
+.pay-table tr.off td { color: var(--muted); }
+.pay-table tr.off td.calc { font-family: var(--font-body); font-size: 12.5px; }
+.pay-table td .sub { display: block; font-size: 11.5px; color: var(--muted); font-weight: 400; }
+.pay-note { margin: 0; font-size: 12px; color: var(--muted); max-width: 70ch; }
+.d.next { background: var(--ink) !important; color: var(--surface) !important; font-weight: 600; }
+.sw.next { background: var(--ink); }
+
+/* 계산 기준 */
+details.settings { padding: 0; }
+details.settings summary {
+  list-style: none; cursor: pointer; padding: 14px 18px;
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  font-weight: 500;
+}
+details.settings summary::-webkit-details-marker { display: none; }
+details.settings summary > span:first-child { flex: none; white-space: nowrap; }
+details.settings summary .now { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-weight: 400; text-align: right; margin-left: auto; }
+details.settings summary::after { content: "＋"; color: var(--muted); font-size: 14px; }
+details.settings[open] summary::after { content: "－"; }
+.settings-body { border-top: 1px solid var(--line); padding: 16px 18px 18px; display: grid; gap: 18px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.sfield { display: grid; gap: 6px; min-width: 0; align-content: start; }
+.sfield.full { grid-column: 1 / -1; }
+.sfield > label, .sfield > .lbl { font-size: 13px; font-weight: 500; color: var(--muted); }
+.sfield .help { font-size: 12px; color: var(--muted); }
+.unit { position: relative; }
+.unit input { padding-right: 34px; font-family: var(--font-mono); }
+.unit::after { content: "일"; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 14px; pointer-events: none; }
+.unit.yrs::after { content: "년"; }
+.unit.pct::after { content: "%"; }
+.check { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; cursor: pointer; }
+.check input { width: 18px; height: 18px; margin: 3px 0 0; accent-color: var(--accent); flex: none; }
+.reset { justify-self: start; background: transparent; color: var(--muted); border: 1px solid var(--line); }
+.reset:hover { color: var(--ink); }
+
+/* 임금표·공휴일 자료 */
+.data-status { display: grid; gap: 4px; margin: 0; font-size: 13px; }
+.data-status .ver { font-weight: 500; color: var(--ink); }
+.data-status .note { color: var(--warn); }
+.data-status .ok { color: var(--ok); }
+.data-status .muted { color: var(--muted); }
+.wage-edit-wrap { overflow-x: auto; }
+.wage-edit { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.wage-edit th { text-align: left; font-size: 12px; font-weight: 500; color: var(--muted); padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.wage-edit td { padding: 5px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; white-space: nowrap; }
+.wage-edit input { height: 38px; font-family: var(--font-mono); font-size: 14px; text-align: right; min-width: 120px; }
+.wage-edit tr.changed td:first-child { color: var(--warn); font-weight: 500; }
+.maxstep { display: flex; gap: 10px; align-items: center; font-size: 13px; color: var(--muted); }
+.maxstep input { width: 90px; font-family: var(--font-mono); }
+
+.basis { font-size: 12.5px; color: var(--muted); line-height: 1.65; display: grid; gap: 6px; max-width: 66ch; }
+.basis p { margin: 0; }
+.basis b { color: var(--ink); font-weight: 500; }
+
+@media (max-width: 520px) {
+  .inputs { grid-template-columns: 1fr; }
+  .field + .field { border-left: 0; border-top: 1px solid var(--line); }
+  .grid2 { grid-template-columns: 1fr; }
+  .span, .leave-end { text-align: left; }
+  .leave-start { max-width: none; }
+  .pfield { max-width: none; }
+  .pay-table { font-size: 12.5px; }
+  .pay-table td.calc { font-size: 11px; }
+  .pay-table td, .pay-table th { padding-left: 4px; padding-right: 4px; }
+  h1 { font-size: 1.5rem; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .fill { transition: width 0.25s ease; }
+}
+</style>
+
+<main class="wrap">
+  <header>
+    <div class="eyebrow">Work Rules Art. 35 · CBA Art. 15</div>
+    <h1>선원 유급휴가 계산기</h1>
+    <p class="lede">승선일과 하선일을 넣으면 회사 취업규칙·단체협약 기준으로 유급휴가 일수, 빨간날을 더한 휴가 기간, 차기 승선일에 받는 조기승선 수당이 바로 계산됩니다.</p>
+  </header>
+
+  <section class="card inputs" aria-label="날짜 입력">
+    <div class="field">
+      <label for="son">승선일 <span class="code">S/ON</span></label>
+      <input type="date" id="son" value="2026-09-17">
+      <div class="hint">승선한 날</div>
+    </div>
+    <div class="field">
+      <label for="soff">하선일 <span class="code">S/OFF</span></label>
+      <div class="row">
+        <input type="date" id="soff">
+        <button type="button" class="clear" id="clearOff">비우기</button>
+      </div>
+      <div class="hint" id="offHint">비워 두면 오늘까지로 계산</div>
+    </div>
+  </section>
+
+  <section class="result" aria-live="polite" id="result">
+    <div class="headline">
+      <div class="big">
+        <span class="label">유급휴가</span>
+        <span class="num"><span id="leave">–</span><small>일</small></span>
+      </div>
+      <div class="span">
+        <span class="label">승선기간</span>
+        <span class="val" id="spanMonths">–</span>
+        <span class="sub" id="spanTotal"></span>
+      </div>
+    </div>
+    <p class="status" id="status"></p>
+    <div class="formula" id="formula">–</div>
+    <p class="error" id="error" hidden></p>
+
+    <div class="track-wrap" id="trackWrap">
+      <div class="track-head"><span>승무 개월 수</span><span>4 = 청구권 · 6 넘으면 보상휴가</span></div>
+      <div class="track" id="track"><div class="fill" id="fill"></div></div>
+      <div class="ticks" id="ticks" aria-hidden="true"></div>
+    </div>
+
+    <dl class="facts" id="facts">
+      <dt>유급휴가 청구권 (4개월 계속 승무)</dt>
+      <dd><span id="fourDate">–</span><span class="chip" id="fourChip"></span></dd>
+      <dt>유급휴가 부여 기한 (청구권 후 4개월 이내)</dt>
+      <dd><span id="deadline">–</span></dd>
+      <dt>만 6개월 (넘으면 매월 보상휴가 1일)</dt>
+      <dd><span id="sixDate">–</span><span class="chip" id="sixChip"></span></dd>
+    </dl>
+
+    <div class="actions">
+      <button type="button" class="btn" id="copyBtn">결과 복사</button>
+      <input type="text" class="copy-fallback" id="copyFallback" readonly hidden aria-label="복사할 결과">
+    </div>
+  </section>
+
+  <section class="card leave" id="leaveCard" aria-live="polite">
+    <h2>휴가 기간</h2>
+    <div class="leave-top">
+      <div class="leave-inputs">
+        <div class="leave-start">
+          <label for="leaveStart">휴가 시작일</label>
+          <div class="row">
+            <input type="date" id="leaveStart">
+            <button type="button" class="clear" id="clearStart">자동</button>
+          </div>
+          <div class="hint" id="startHint"></div>
+        </div>
+        <div class="leave-edu">
+          <label for="eduDays">휴가 중 교육</label>
+          <div class="unit"><input type="number" id="eduDays" min="0" max="365" step="1" value="0" inputmode="numeric"></div>
+          <div class="hint">휴가 일수에 안 들어감</div>
+        </div>
+      </div>
+      <div class="leave-end">
+        <span class="label">휴가 마지막 날</span>
+        <span class="val" id="leaveEnd">–</span>
+        <span class="sub" id="leaveEndSub"></span>
+      </div>
+    </div>
+    <div class="sum" id="leaveSum"></div>
+    <p class="warn-note" id="leaveWarn" hidden></p>
+    <div class="holi-list" id="holiList"></div>
+    <div class="legend" aria-hidden="true">
+      <span><i class="sw on"></i>휴가로 쓰는 날</span>
+      <span><i class="sw redon"></i>휴가 중 빨간날 (추가된 날)</span>
+      <span><i class="sw edge"></i>시작·마지막 날</span>
+      <span id="legendNext" hidden><i class="sw next"></i>차기 승선일</span>
+    </div>
+    <div class="cal" id="cal"></div>
+  </section>
+
+  <section class="card pay" id="payCard" aria-live="polite">
+    <h2>조기승선 수당</h2>
+    <div class="pay-inputs">
+      <div class="pfield">
+        <label for="rank">직책</label>
+        <select id="rank">
+          <option value="captain">선기장</option>
+          <option value="first">1항기사</option>
+          <option value="second">2항기사</option>
+          <option value="third" selected>3항기사</option>
+          <option value="foreman">직장</option>
+        </select>
+        <div class="hint" id="wageSrc">2026년도 흥아라인 임금표 (컨테이너선 1,000TEU 이상)</div>
+      </div>
+      <div class="pfield narrow">
+        <label for="step">호봉</label>
+        <select id="step"></select>
+        <div class="hint" id="stepHint"></div>
+      </div>
+      <div class="pfield">
+        <label for="wage">통상임금</label>
+        <div class="unit won"><input type="text" id="wage" inputmode="numeric" autocomplete="off" aria-describedby="wageHint"></div>
+        <div class="hint-row"><span class="hint" id="wageHint">임금표 금액 · 직접 고칠 수 있음</span><button type="button" class="linkbtn" id="resetWage" hidden>임금표대로</button></div>
+      </div>
+      <div class="pfield">
+        <label for="nextOn">차기 승선일</label>
+        <div class="row">
+          <input type="date" id="nextOn">
+          <button type="button" class="clear" id="clearNext">비우기</button>
+        </div>
+        <div class="hint" id="nextHint">휴가 중에 승선하면 남은 휴가만큼 수당</div>
+      </div>
+    </div>
+    <div class="pay-total">
+      <span class="label" id="payTotalLabel">조기승선 수당 (세전)</span>
+      <span class="val" id="payTotal">–</span>
+    </div>
+    <p class="pay-status" id="payStatus"></p>
+    <div class="pay-table-wrap">
+      <table class="pay-table">
+        <thead><tr><th scope="col">항목</th><th scope="col">계산</th><th scope="col" class="amt">값</th></tr></thead>
+        <tbody id="payRows"></tbody>
+      </table>
+    </div>
+    <p class="pay-note">휴가를 다 쓰기 전에 승선하면 쓰지 못한 휴가 일수만큼 통상임금(호봉 포함)의 170%를 받습니다 (재직 중인 선원, 취업규칙 35조 8항·단체협약 부칙 1조). 일할 계산은 1개월 30일 (취업규칙 41조 5항). 세금·공제 전 금액이고 원 미만은 버립니다.</p>
+  </section>
+
+  <details class="card settings" id="settings">
+    <summary><span>계산 기준</span><span class="now" id="settingsNow"></span></summary>
+    <div class="settings-body">
+      <div class="grid2">
+        <div class="sfield">
+          <label for="perMonth">1개월당 유급휴가 일수</label>
+          <div class="unit"><input type="number" id="perMonth" min="0" max="31" step="0.5" value="10" inputmode="decimal"></div>
+          <span class="help">회사 기준 10일 (단체협약 15조: 최소 10일, 선원법은 6일)</span>
+        </div>
+        <div class="sfield">
+          <label for="method">1개월 미만 끝수 처리</label>
+          <select id="method">
+            <option value="prorata">일할 계산 (남은 일수 ÷ 30)</option>
+            <option value="total">총 승선일수 ÷ 30</option>
+            <option value="floor">1개월 미만 버림</option>
+            <option value="ceil">1개월 미만은 1개월로</option>
+          </select>
+        </div>
+        <div class="sfield">
+          <label for="rounding">결과 자릿수</label>
+          <select id="rounding">
+            <option value="ceil" selected>정수 올림 (1일 미만은 1일로)</option>
+            <option value="round">정수 반올림</option>
+            <option value="floor">정수 버림</option>
+            <option value="d1">소수 첫째 자리 (반올림)</option>
+            <option value="d2">소수 둘째 자리 (반올림)</option>
+          </select>
+          <span class="help">취업규칙 35조·단체협약 15조: 1일 미만 단수는 1일로</span>
+        </div>
+        <div class="sfield">
+          <span class="lbl">보상휴가</span>
+          <label class="check"><input type="checkbox" id="compOn" checked><span>만 6개월 넘게 탔으면 이후 매월 1일 추가</span></label>
+          <span class="help">본인이 원해서 6개월 넘게 승선했으면 끄세요 (단체협약 15조의1)</span>
+        </div>
+        <div class="sfield">
+          <label for="years">회사 계속 근로 연수 (근속 가산)</label>
+          <div class="unit yrs"><input type="number" id="years" min="0" max="50" step="1" placeholder="0" inputmode="numeric"></div>
+          <span class="help">2년 이상이면 1년을 넘는 연수마다 1일 추가 (취업규칙 35조 5항)</span>
+        </div>
+        <div class="sfield">
+          <span class="lbl">승선기간 세는 법</span>
+          <label class="check"><input type="checkbox" id="inclusive" checked><span>승선일과 하선일을 둘 다 승선기간에 넣기</span></label>
+        </div>
+        <div class="sfield">
+          <span class="lbl">빨간날</span>
+          <label class="check"><input type="checkbox" id="addRed" checked><span>휴가 중 빨간날은 휴가에서 빼고 그만큼 늘리기</span></label>
+          <label class="check"><input type="checkbox" id="sundays" checked><span>일요일도 빨간날로 보기</span></label>
+        </div>
+        <div class="sfield">
+          <label for="rateUnused">조기승선 수당 비율</label>
+          <div class="unit pct"><input type="number" id="rateUnused" min="0" max="500" step="1" value="170" inputmode="numeric"></div>
+          <span class="help">쓰지 못한 휴가: 통상임금의 170% (2026.01.01부터, 취업규칙 35조 8항·단체협약 부칙 1조)</span>
+        </div>
+        <div class="sfield">
+          <label for="custom">임시공휴일 직접 추가</label>
+          <textarea id="custom" placeholder="2027-06-03 임시공휴일&#10;2028.01.31"></textarea>
+          <span class="help">한 줄에 하나씩. 날짜 뒤에 이름을 써도 됩니다.</span>
+        </div>
+      </div>
+      <button type="button" class="btn reset" id="resetBtn">기본값으로</button>
+    </div>
+  </details>
+
+  <details class="card settings" id="dataBox">
+    <summary><span>임금표·공휴일 자료</span><span class="now" id="dataNow"></span></summary>
+    <div class="settings-body">
+      <div class="data-status" id="dataStatus"></div>
+      <div class="actions">
+        <button type="button" class="btn" id="updateBtn">인터넷에서 최신 자료 받기</button>
+        <span class="hint" id="updateHint">GitHub에 올려 둔 data.json을 받아 옵니다. 앱을 켤 때마다 인터넷이 되면 자동으로 확인합니다.</span>
+      </div>
+      <div class="sfield">
+        <span class="lbl">임금표 직접 고치기</span>
+        <span class="help">임금표가 바뀌었는데 인터넷 자료가 아직 안 올라왔을 때 씁니다. 나중에 인터넷에서 새 판 자료를 받으면 직접 고친 값은 해제됩니다.</span>
+        <div class="wage-edit-wrap">
+          <table class="wage-edit">
+            <thead><tr><th scope="col">직책</th><th scope="col">통상임금 (원)</th><th scope="col">호봉 1개당 (원)</th></tr></thead>
+            <tbody id="wageEditRows"></tbody>
+          </table>
+        </div>
+        <label class="maxstep">최대 호봉 <input type="number" id="maxStepIn" min="0" max="60" step="1" inputmode="numeric"></label>
+        <div class="actions">
+          <button type="button" class="btn" id="wageSave">고친 임금표 저장</button>
+          <button type="button" class="btn reset" id="wageRevert">자료대로 되돌리기</button>
+          <span class="hint" id="wageEditHint"></span>
+        </div>
+      </div>
+      <p class="help" style="margin:0">공휴일은 다음 해 것이 발표되면 자료 파일에 추가됩니다. 그 전에 필요한 날은 위 "계산 기준"의 임시공휴일 칸에 넣으세요.</p>
+    </div>
+  </details>
+
+  <footer class="basis">
+    <p><b>일수</b> 계속 승무 1개월에 10일, 1개월 미만은 비율로 계산하고 1일 미만 단수는 1일로 (흥아라인 선원취업규칙 2026.01.27 제35조 4항, 국제선박 한국인선원 단체협약 2024.08.01 제15조 ②③).</p>
+    <p><b>청구권</b> 4개월 이상 계속 승무하면 유급휴가 청구권이 생기고, 그때부터 4개월 이내에 휴가를 줘야 합니다 (단체협약 15조 ①, 취업규칙 35조 1항).</p>
+    <p><b>보상휴가</b> 연속 만 6개월을 넘게 승무하면 이후 매월 1일씩 추가. 본인이 원해서 6개월 넘게 승무한 경우는 제외 (단체협약 15조의1, 취업규칙 35조 12항). 계산기는 6개월을 넘긴 꽉 찬 개월 수만큼 더합니다.</p>
+    <p><b>빨간날·교육</b> 관공서의 공휴일(일요일, 임시·대체공휴일 포함)과 근로자의 날(현 노동절), 휴가 중 교육기간은 유급휴가 사용일수에 넣지 않아 그만큼 휴가가 늘어납니다 (취업규칙 35조 6항·10항, 단체협약 17조, 선원법 71조).</p>
+    <p><b>조기승선 수당</b> 쓰지 못한 휴가 일수 × 통상임금(호봉 포함)의 170% ÷ 30 (2026.01.01부터, 취업규칙 35조 8항, 단체협약 부칙 1조). 차기 승선일 당일은 휴가로 세지 않습니다.</p>
+    <p id="basisWage"><b>통상임금</b> 2026년도 흥아라인 임금표(2026.01.01부, 컨테이너선 1,000TEU 이상)의 직책별 통상임금에 호봉 수(0~5호봉) × 호봉 단가(선기장 20,000원, 1항기사 15,000원, 2항기사 10,000원, 3항기사 10,000원, 직장 10,000원)를 더합니다. 금액이 다르면 통상임금 칸을 직접 고치면 되고, "임금표대로"를 누르면 표 금액으로 돌아갑니다. 통상임금은 시간외수당을 뺀 통상급여입니다 (취업규칙 39조).</p>
+    <p id="basisRed"><b>빨간날 자료</b> 확정 발표된 2026·2027년 관공서 공휴일만 들어 있습니다 (대체공휴일·선거일·노동절·제헌절 포함). 다음 해 공휴일은 발표되면 자료 파일에 추가되고, 인터넷이 될 때 받아 옵니다. 그 전에 휴가가 2028년으로 넘어가면 일요일만 빨간날로 계산되니, 필요한 날은 계산 기준의 "임시공휴일 직접 추가"에 넣으세요.</p>
+    <p><b>개월 수</b> 달력 기준으로 셉니다. 9월 17일 승선이면 10월 16일까지가 1개월이고, 해당 날짜가 없는 달(예: 1월 31일 승선 → 2월)은 그 달 말일까지를 1개월로 봅니다. 소수점이 있으면 휴가 기간은 정수 부분 일수로 잡고 남는 소수는 따로 표시합니다.</p>
+  </footer>
+</main>
+
+<script>
+/* ---------- 공휴일 (빨간날) ---------- */
+var HOLIDAYS = {
+  '2026-01-01': '신정', '2026-02-16': '설날 연휴', '2026-02-17': '설날', '2026-02-18': '설날 연휴',
+  '2026-03-01': '3·1절', '2026-03-02': '대체공휴일(3·1절)', '2026-05-01': '노동절', '2026-05-05': '어린이날',
+  '2026-05-24': '부처님오신날', '2026-05-25': '대체공휴일(부처님오신날)', '2026-06-03': '지방선거',
+  '2026-06-06': '현충일', '2026-07-17': '제헌절', '2026-08-15': '광복절', '2026-08-17': '대체공휴일(광복절)',
+  '2026-09-24': '추석 연휴', '2026-09-25': '추석', '2026-09-26': '추석 연휴', '2026-10-03': '개천절',
+  '2026-10-05': '대체공휴일(개천절)', '2026-10-09': '한글날', '2026-12-25': '기독탄신일',
+
+  '2027-01-01': '신정', '2027-02-06': '설날 연휴', '2027-02-07': '설날', '2027-02-08': '설날 연휴',
+  '2027-02-09': '대체공휴일(설날)', '2027-03-01': '3·1절', '2027-05-01': '노동절', '2027-05-03': '대체공휴일(노동절)',
+  '2027-05-05': '어린이날', '2027-05-13': '부처님오신날', '2027-06-06': '현충일', '2027-07-17': '제헌절',
+  '2027-07-19': '대체공휴일(제헌절)', '2027-08-15': '광복절', '2027-08-16': '대체공휴일(광복절)',
+  '2027-09-14': '추석 연휴', '2027-09-15': '추석', '2027-09-16': '추석 연휴', '2027-10-03': '개천절',
+  '2027-10-04': '대체공휴일(개천절)', '2027-10-09': '한글날', '2027-10-11': '대체공휴일(한글날)',
+  '2027-12-25': '기독탄신일', '2027-12-27': '대체공휴일(기독탄신일)'
+};
+var HOLIDAY_YEARS = { 2026: true, 2027: true };   /* 확정 발표된 해만. 매년 다음 해 공휴일이 발표되면 추가 */
+
+/* ---------- 날짜 계산 (UTC 일 번호로 처리) ---------- */
+function dn(y, m, d) { return Math.round(Date.UTC(y, m, d) / 864e5); }
+function fromDn(n) { var t = new Date(n * 864e5); return { y: t.getUTCFullYear(), m: t.getUTCMonth(), d: t.getUTCDate(), w: t.getUTCDay() }; }
+function dim(y, m) { return new Date(Date.UTC(y, m + 1, 0)).getUTCDate(); }
+function pad(n) { return String(n).padStart(2, '0'); }
+function parseYmd(v) {
+  if (!v) return null;
+  var p = String(v).split('-').map(Number);
+  if (p.length !== 3 || !p[0] || !p[1] || !p[2]) return null;
+  return { y: p[0], m: p[1] - 1, d: p[2] };
+}
+function ymdDn(v) { var o = parseYmd(v); return o ? dn(o.y, o.m, o.d) : null; }
+function keyOf(n) { var t = fromDn(n); return t.y + '-' + pad(t.m + 1) + '-' + pad(t.d); }
+var WD = ['일', '월', '화', '수', '목', '금', '토'];
+function fmtDate(n) { var t = fromDn(n); return t.y + '.' + pad(t.m + 1) + '.' + pad(t.d); }
+function fmtDateW(n) { return fmtDate(n) + '(' + WD[fromDn(n).w] + ')'; }
+function fmtMD(n) { var t = fromDn(n); return pad(t.m + 1) + '.' + pad(t.d); }
+
+/* 승선일(s)부터 n개월째가 끝나는 날 (민법식: 해당일 전날, 해당일이 없으면 그 달 말일) */
+function monthEnd(s, n) {
+  var t = s.m + n;
+  var ty = s.y + Math.floor(t / 12);
+  var tm = ((t % 12) + 12) % 12;
+  var last = dim(ty, tm);
+  return s.d <= last ? dn(ty, tm, s.d) - 1 : dn(ty, tm, last);
+}
+function servicePeriod(s, endDn) {
+  var sDn = dn(s.y, s.m, s.d);
+  var n = 0;
+  while (n < 1200 && monthEnd(s, n + 1) <= endDn) n++;
+  return { months: n, rem: endDn - monthEnd(s, n), total: endDn - sDn + 1 };
+}
+function clean(x) { return Math.round(x * 1e6) / 1e6; }
+function leaveRaw(p, per, method) {
+  switch (method) {
+    case 'total': return clean(p.total / 30 * per);
+    case 'floor': return clean(p.months * per);
+    case 'ceil':  return clean((p.months + (p.rem > 0 ? 1 : 0)) * per);
+    default:      return clean(p.months * per + p.rem / 30 * per);
+  }
+}
+function roundLeave(x, mode) {
+  switch (mode) {
+    case 'd2': return Math.round(x * 100) / 100;
+    case 'round': return Math.round(x);
+    case 'ceil': return Math.ceil(x - 1e-9);
+    case 'floor': return Math.floor(x + 1e-9);
+    default: return Math.round(x * 10) / 10;
+  }
+}
+function fmtLeave(x, mode) {
+  if (mode === 'd1') return x.toFixed(1);
+  if (mode === 'd2') return x.toFixed(2);
+  return String(x);
+}
+function fmtNum(x) { return String(clean(x)); }
+
+function calculate(input) {
+  var s = parseYmd(input.son);
+  if (!s) return { error: '승선일을 입력하세요.' };
+  var sDn = dn(s.y, s.m, s.d);
+  var offGiven = !!parseYmd(input.soff);
+  var offDn = offGiven ? ymdDn(input.soff) : input.todayDn;
+  var endDn = input.inclusive ? offDn : offDn - 1;
+  if (offDn < sDn) return { error: (offGiven ? '하선일' : '오늘') + '이 승선일보다 빠릅니다. 날짜를 확인하세요.' };
+  if (endDn < sDn) return { error: '하선일을 빼고 세면 승선기간이 0일입니다. 날짜를 확인하세요.' };
+  var per = Number(input.perMonth);
+  if (input.perMonth === '' || !isFinite(per) || per < 0) return { error: '1개월당 일수는 0 이상의 숫자로 넣어 주세요.' };
+
+  var p = servicePeriod(s, endDn);
+  var raw = leaveRaw(p, per, input.method);
+  var fin = roundLeave(raw, input.rounding);
+
+  var f;
+  if (input.method === 'total') f = p.total + '일 ÷ 30 × ' + fmtNum(per) + '일 = ' + fmtNum(raw) + '일';
+  else if (input.method === 'floor') f = p.months + '개월 × ' + fmtNum(per) + '일 = ' + fmtNum(raw) + '일' + (p.rem ? '  (1개월 미만 ' + p.rem + '일 제외)' : '');
+  else if (input.method === 'ceil') f = (p.months + (p.rem > 0 ? 1 : 0)) + '개월 × ' + fmtNum(per) + '일 = ' + fmtNum(raw) + '일' + (p.rem ? '  (' + p.rem + '일을 1개월로)' : '');
+  else {
+    var parts = [];
+    if (p.months) parts.push(p.months + '개월 × ' + fmtNum(per) + '일');
+    if (p.rem || !p.months) parts.push(p.rem + '일 ÷ 30 × ' + fmtNum(per) + '일');
+    f = parts.join(' + ') + ' = ' + fmtNum(raw) + '일';
+  }
+  if (clean(fin) !== raw) f += '  →  ' + fmtLeave(fin, input.rounding) + '일';
+
+  /* 보상휴가: 만 6개월을 넘긴 꽉 찬 개월마다 1일 (단체협약 15조의1) */
+  var comp = input.compOn ? Math.max(0, p.months - 6) : 0;
+  /* 근속 가산: 2년 이상이면 1년을 넘는 연수마다 1일 (취업규칙 35조 5항) */
+  var yrs = Math.floor(Math.max(0, Number(input.years) || 0));
+  var senior = yrs >= 2 ? yrs - 1 : 0;
+  var total = clean(fin + comp + senior);
+  if (comp) f += '  + 보상휴가 ' + comp + '일';
+  if (senior) f += '  + 근속 가산 ' + senior + '일';
+  if (comp || senior) f += '  = ' + fmtLeave(total, input.rounding) + '일';
+
+  return {
+    sDn: sDn, offDn: offDn, endDn: endDn, offGiven: offGiven, period: p,
+    raw: raw, base: fin, comp: comp, senior: senior, compOn: !!input.compOn,
+    leave: total, leaveText: fmtLeave(total, input.rounding), formula: f,
+    fourDn: monthEnd(s, 4), deadlineDn: monthEnd(s, 8), sixDn: monthEnd(s, 6), s: s
+  };
+}
+
+/* 직접 추가한 빨간날: "2027-06-03 이름" / "2027.6.3" 한 줄에 하나 */
+function parseCustom(text) {
+  var map = {}, bad = [];
+  String(text || '').split(/\r?\n/).forEach(function (line) {
+    var t = line.trim();
+    if (!t) return;
+    var m = t.match(/^(\d{4})\s*[.\-\/]\s*(\d{1,2})\s*[.\-\/]\s*(\d{1,2})\.?\s*(.*)$/);
+    if (!m) { bad.push(t); return; }
+    var y = +m[1], mo = +m[2] - 1, d = +m[3];
+    if (mo < 0 || mo > 11 || d < 1 || d > dim(y, mo)) { bad.push(t); return; }
+    map[keyOf(dn(y, mo, d))] = m[4].trim() || '임시공휴일';
+  });
+  return { map: map, bad: bad };
+}
+
+/* 그날이 빨간날이면 {name, holiday, sunday}, 아니면 null */
+function redInfo(n, opts) {
+  var k = keyOf(n);
+  var name = (opts.custom && opts.custom[k]) || HOLIDAYS[k];
+  var sun = !!opts.sundays && fromDn(n).w === 0;
+  if (name) return { name: name, holiday: true, sunday: sun };
+  if (sun) return { name: '일요일', holiday: false, sunday: true };
+  return null;
+}
+
+/* 휴가 시작일부터 유급휴가(정수 일수)와 휴가 중 교육 일수를 쓰되, 빨간날은 세지 않고 하루씩 늘림 */
+function leavePeriod(startDn, days, opts, eduDays) {
+  var whole = Math.floor(days + 1e-9);
+  var frac = clean(days - whole);
+  var edu = Math.floor(Math.max(0, Number(eduDays) || 0));
+  if (whole <= 0) return { whole: 0, edu: edu, frac: frac };
+  var need = whole + edu;
+  var d = startDn, used = 0, reds = [], guard = 0;
+  while (used < need && guard < 20000) {
+    var r = opts.addRed ? redInfo(d, opts) : null;
+    if (r) reds.push({ dn: d, name: r.name, holiday: r.holiday });
+    else used++;
+    d++; guard++;
+  }
+  var endDn = d - 1;
+  var missing = [];
+  for (var y = fromDn(startDn).y; y <= fromDn(endDn).y; y++) if (!HOLIDAY_YEARS[y]) missing.push(y);
+  return {
+    start: startDn, end: endDn, whole: whole, edu: edu, frac: frac, reds: reds,
+    calendarDays: endDn - startDn + 1,
+    sundayCount: reds.filter(function (r) { return !r.holiday; }).length,
+    holidays: reds.filter(function (r) { return r.holiday; }),
+    missingYears: missing
+  };
+}
+
+/* ---------- 조기승선 수당 ---------- */
+/* 2026년도 흥아라인 임금표 (2026.01.01부, 컨테이너선 1,000TEU 이상) — 통상임금, 호봉 단가 */
+var WAGE_TABLE = {
+  captain: { name: '선기장', base: 6715000, step: 20000 },
+  first:   { name: '1항기사', base: 4860000, step: 15000 },
+  second:  { name: '2항기사', base: 3175000, step: 10000 },
+  third:   { name: '3항기사', base: 2841000, step: 10000 },
+  foreman: { name: '직장',    base: 3018000, step: 10000 }
+};
+var MAX_STEP = 5;   /* 회사 호봉은 5호봉까지 */
+function rankOf(rank) { return WAGE_TABLE[rank] || WAGE_TABLE.third || WAGE_TABLE[Object.keys(WAGE_TABLE)[0]]; }
+function ordinaryWage(rank, step) {
+  var w = rankOf(rank);
+  var n = Math.max(0, Math.min(MAX_STEP, Math.floor(Number(step) || 0)));
+  return { name: w.name, base: w.base, unit: w.step, step: n, wage: w.base + w.step * n };
+}
+
+/* 차기 승선일 기준으로 휴가 쓴 날·못 쓴 날·휴가 뒤 대기 일수 */
+function payDays(total, L, nextDn, opts) {
+  var res = { mode: 'full', used: total, unused: 0, reds: L.reds ? L.reds.length : 0, wait: 0, edu: L.edu || 0, next: nextDn };
+  if (nextDn == null || !(L.whole > 0)) return res;
+  var last = nextDn - 1;
+  if (last < L.start) {
+    res.mode = 'before'; res.used = 0; res.unused = total; res.reds = 0; res.edu = 0;
+    return res;
+  }
+  if (last >= L.end) { res.mode = 'after'; res.wait = last - L.end; return res; }
+  var nonred = 0, reds = 0;
+  for (var d = L.start; d <= last; d++) {
+    if (opts.addRed && redInfo(d, opts)) reds++; else nonred++;
+  }
+  var edu = Math.min(L.edu || 0, nonred);
+  var used = Math.min(total, Math.max(0, nonred - edu));
+  res.mode = 'within'; res.used = used; res.unused = clean(total - used); res.reds = reds; res.edu = edu;
+  return res;
+}
+/* 통상임금 × 비율% ÷ 30 × 일수, 원 미만 버림 */
+function wonAmount(wage, ratePct, days) {
+  if (!(wage > 0) || !(days > 0)) return 0;
+  return Math.floor(wage * ratePct * days / 3000 + 1e-7);
+}
+function earlyAllowance(wage, pd, ratePct) {
+  return pd.mode === 'within' || pd.mode === 'before' ? wonAmount(wage, ratePct, pd.unused) : 0;
+}
+function parseWon(s) { var n = Number(String(s || '').replace(/[^\d]/g, '')); return n > 0 ? n : 0; }
+function comma(n) { return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+
+/* ---------- 자료 파일 (임금표·공휴일) ----------
+   위 HOLIDAYS·WAGE_TABLE은 계산기에 들어 있는 기본 자료. 앱에 같이 넣은 data.json, 인터넷(GitHub)에서 받은 data.json,
+   직접 고친 임금표 순으로 덮어쓴다. 안드로이드 앱이면 window.Android(앱이 넣어 주는 다리)로 파일을 읽고 쓰고,
+   웹이면 localStorage와 fetch를 쓴다. */
+var DATA_URL = 'https://raw.githubusercontent.com/tanbaalbo/vacation_calculator/main/data.json';
+var DATA_KEY = 'seafarer-leave-calc.data.v1';
+var BUILTIN_DATA = {
+  dataVersion: '2026-10-13',
+  wage: { title: '2026년도 흥아라인 임금표', effective: '2026-01-01', scope: '컨테이너선 1,000TEU 이상', maxStep: MAX_STEP, ranks: WAGE_TABLE },
+  holidays: { country: 'KR', years: [2026, 2027], days: HOLIDAYS }
+};
+var APP = (typeof window !== 'undefined' && window.Android && typeof window.Android.loadData === 'function') ? window.Android : null;
+var DATA = BUILTIN_DATA;
+var dataState = { source: 'builtin', fetchedAt: '', checkedAt: '', manual: null, note: '', noteKind: '', busy: false, byUser: false };
+var SOURCE_LABEL = { builtin: '계산기에 들어 있는 자료', bundled: '앱에 들어 있는 자료', remote: '인터넷(GitHub)에서 받은 자료' };
+
+function isYmd(s) { return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !!parseYmd(s); }
+function isMoney(x) { return typeof x === 'number' && isFinite(x) && x >= 0; }
+/* 받은 자료가 쓸 수 있는 모양인지 (틀리면 기존 자료 유지) */
+function validData(d) {
+  if (!d || typeof d !== 'object' || !isYmd(d.dataVersion)) return false;
+  var w = d.wage, h = d.holidays;
+  if (!w || typeof w !== 'object' || !w.ranks || typeof w.ranks !== 'object') return false;
+  var keys = Object.keys(w.ranks);
+  if (!keys.length) return false;
+  for (var i = 0; i < keys.length; i++) {
+    var r = w.ranks[keys[i]];
+    if (!r || typeof r.name !== 'string' || !r.name.trim() || !isMoney(r.base) || !isMoney(r.step)) return false;
+  }
+  if (typeof w.maxStep !== 'number' || !(w.maxStep >= 0 && w.maxStep <= 60) || Math.floor(w.maxStep) !== w.maxStep) return false;
+  if (!h || typeof h !== 'object' || !h.days || typeof h.days !== 'object') return false;
+  var dk = Object.keys(h.days);
+  for (var j = 0; j < dk.length; j++) if (!isYmd(dk[j]) || typeof h.days[dk[j]] !== 'string') return false;
+  if (h.years !== undefined && !(Array.isArray(h.years) && h.years.every(function (y) { return typeof y === 'number' && y > 1900 && y < 3000; }))) return false;
+  return true;
+}
+function dataYears(d) {
+  var set = {};
+  if (Array.isArray(d.holidays.years)) d.holidays.years.forEach(function (y) { set[y] = true; });
+  else Object.keys(d.holidays.days).forEach(function (k) { set[+k.slice(0, 4)] = true; });
+  return Object.keys(set).map(Number).sort(function (a, b) { return a - b; });
+}
+function cloneJson(x) { return JSON.parse(JSON.stringify(x)); }
+function nowStamp() { var t = new Date(); return t.getFullYear() + '.' + pad(t.getMonth() + 1) + '.' + pad(t.getDate()) + ' ' + pad(t.getHours()) + ':' + pad(t.getMinutes()); }
+
+/* 자료를 계산에 쓰는 표(HOLIDAYS·WAGE_TABLE·MAX_STEP)에 반영. 같은 판에서 직접 고친 임금표가 있으면 그걸 씀 */
+function applyData(d) {
+  DATA = d;
+  HOLIDAYS = d.holidays.days;
+  HOLIDAY_YEARS = {};
+  dataYears(d).forEach(function (y) { HOLIDAY_YEARS[y] = true; });
+  var m = dataState.manual;
+  if (m && m.baseVersion !== d.dataVersion) { dataState.manual = null; m = null; }
+  if (m) { WAGE_TABLE = cloneJson(m.ranks); MAX_STEP = m.maxStep; }
+  else { WAGE_TABLE = cloneJson(d.wage.ranks); MAX_STEP = d.wage.maxStep; }
+}
+function readStore() {
+  try {
+    var raw = APP ? APP.loadData() : localStorage.getItem(DATA_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+function writeStore() {
+  try {
+    var s = JSON.stringify({ data: DATA, source: dataState.source, fetchedAt: dataState.fetchedAt, checkedAt: dataState.checkedAt, manual: dataState.manual });
+    if (APP) APP.saveData(s); else localStorage.setItem(DATA_KEY, s);
+  } catch (e) {}
+}
+/* 켤 때: 기본 자료 → 앱에 넣은 data.json → 저장해 둔(인터넷에서 받은) 자료 중 가장 새 판 */
+function initData() {
+  var cand = BUILTIN_DATA, src = 'builtin', bundled = null;
+  if (APP) { try { bundled = JSON.parse(APP.bundledData() || 'null'); } catch (e) {} }
+  if (bundled && validData(bundled)) { cand = bundled; src = 'bundled'; }
+  var saved = readStore();
+  if (saved && saved.data && validData(saved.data)) {
+    if (saved.data.dataVersion >= cand.dataVersion) {
+      cand = saved.data;
+      if (saved.source === 'remote') { src = 'remote'; dataState.fetchedAt = saved.fetchedAt || ''; }
+    }
+    dataState.checkedAt = saved.checkedAt || '';
+    if (saved.manual && saved.manual.ranks && typeof saved.manual.maxStep === 'number') dataState.manual = saved.manual;
+  }
+  dataState.source = src;
+  applyData(cand);
+}
+function setNote(text, kind) { dataState.note = text || ''; dataState.noteKind = kind || ''; }
+
+/* 인터넷에서 data.json 받기 (앱: 자바 쪽이 받아서 onDataFetched로 돌려줌 / 웹: fetch) */
+function fetchRemote(byUser) {
+  if (dataState.busy) return;
+  dataState.busy = true; dataState.byUser = !!byUser;
+  setNote('인터넷에서 자료를 확인하는 중…', 'muted');
+  renderDataStatus();
+  if (APP) {
+    var online = true;
+    try { online = APP.isOnline(); } catch (e) {}
+    if (!online) { onDataFetchFailed('인터넷 연결이 없습니다'); return; }
+    try { APP.fetchData(); } catch (e) { onDataFetchFailed(String(e)); }
+    return;
+  }
+  try {
+    fetch(DATA_URL, { cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+      .then(onDataFetched, function (e) { onDataFetchFailed(e && e.message ? e.message : String(e)); });
+  } catch (e) { onDataFetchFailed(String(e)); }
+}
+function onDataFetched(text) {
+  dataState.busy = false;
+  var d = null;
+  try { d = JSON.parse(text); } catch (e) {}
+  dataState.checkedAt = nowStamp();
+  if (!validData(d)) {
+    setNote('받은 자료 파일에 오류가 있어 기존 자료를 그대로 씁니다. GitHub의 data.json을 확인하세요.', 'note');
+    writeStore(); renderDataStatus(); return;
+  }
+  if (JSON.stringify(d) !== JSON.stringify(DATA)) {
+    var hadManual = !!dataState.manual;
+    applyData(d);
+    dataState.source = 'remote'; dataState.fetchedAt = dataState.checkedAt;
+    setNote('자료를 ' + d.dataVersion + '판으로 업데이트했습니다.' + (hadManual && !dataState.manual ? ' 직접 고친 임금표는 해제했습니다.' : ''), 'ok');
+    writeStore();
+    refreshAfterData();
+  } else {
+    setNote('이미 최신 자료입니다 (' + d.dataVersion + '판).', 'ok');
+    writeStore();
+  }
+  renderDataStatus();
+}
+function onDataFetchFailed(msg) {
+  dataState.busy = false;
+  if (dataState.byUser) setNote('인터넷에서 자료를 받지 못했습니다 (' + msg + '). 기존 자료로 계산합니다.', 'note');
+  else setNote('', '');
+  renderDataStatus();
+}
+if (typeof window !== 'undefined') { window.onDataFetched = onDataFetched; window.onDataFetchFailed = onDataFetchFailed; }
+
+/* 자료가 바뀐 뒤 화면 다시 그리기 (직책 목록·호봉 목록·안내 문구·계산) */
+function refreshAfterData() {
+  fillRanks();
+  fillSteps(el('rank').value);
+  var w = DATA.wage;
+  el('wageSrc').textContent = w.title + (w.scope ? ' (' + w.scope + ')' : '') + (dataState.manual ? ' · 직접 고친 값' : '');
+  var bw = el('basisWage'); bw.innerHTML = '';
+  var b1 = document.createElement('b'); b1.textContent = '통상임금'; bw.appendChild(b1);
+  var eff = parseYmd(w.effective); var effTxt = eff ? fmtDate(dn(eff.y, eff.m, eff.d)) + '부' : '';
+  var units = Object.keys(WAGE_TABLE).map(function (k) { return WAGE_TABLE[k].name + ' ' + comma(WAGE_TABLE[k].step) + '원'; }).join(', ');
+  bw.appendChild(document.createTextNode(' ' + w.title + '(' + [effTxt, w.scope].filter(Boolean).join(', ') + ')의 직책별 통상임금에 호봉 수(0~' + MAX_STEP + '호봉) × 호봉 단가(' + units + ')를 더합니다' +
+    (dataState.manual ? ' — 지금은 "임금표·공휴일 자료"에서 직접 고친 금액을 씁니다' : '') +
+    '. 금액이 다르면 통상임금 칸을 직접 고치면 되고, "임금표대로"를 누르면 표 금액으로 돌아갑니다. 통상임금은 시간외수당을 뺀 통상급여입니다 (취업규칙 39조).'));
+  var yrs = dataYears(DATA), last = yrs.length ? yrs[yrs.length - 1] : 0;
+  var br = el('basisRed'); br.innerHTML = '';
+  var b2 = document.createElement('b'); b2.textContent = '빨간날 자료'; br.appendChild(b2);
+  br.appendChild(document.createTextNode(' 확정 발표된 ' + (yrs.length ? yrs.join('·') + '년' : '해의') + ' 관공서 공휴일만 들어 있습니다 (대체공휴일·선거일·노동절·제헌절 포함). 다음 해 공휴일은 발표되면 자료 파일에 추가되고, 인터넷이 될 때 받아 옵니다. 그 전에 휴가가 ' +
+    (last ? last + 1 + '년' : '자료에 없는 해') + '으로 넘어가면 일요일만 빨간날로 계산되니, 필요한 날은 계산 기준의 "임시공휴일 직접 추가"에 넣으세요.'));
+  renderWageEdit();
+  if (typeof render === 'function' && el('son')) render();
+}
+function fillRanks() {
+  var sel = el('rank'), cur = sel.value;
+  sel.innerHTML = '';
+  Object.keys(WAGE_TABLE).forEach(function (k) { var o = document.createElement('option'); o.value = k; o.textContent = WAGE_TABLE[k].name; sel.appendChild(o); });
+  sel.value = cur;
+  if (!sel.value) sel.value = WAGE_TABLE.third ? 'third' : Object.keys(WAGE_TABLE)[0];
+}
+function renderDataStatus() {
+  var box = el('dataStatus'); if (!box) return;
+  box.innerHTML = '';
+  function line(text, cls) { var p = document.createElement('span'); p.textContent = text; if (cls) p.className = cls; box.appendChild(p); }
+  var srcTxt = SOURCE_LABEL[dataState.source] || dataState.source;
+  if (dataState.source === 'remote' && dataState.fetchedAt) srcTxt += ' (' + dataState.fetchedAt + ')';
+  line('자료 ' + DATA.dataVersion + '판 · ' + srcTxt, 'ver');
+  var yrs = dataYears(DATA);
+  line(DATA.wage.title + ' · 공휴일 ' + (yrs.length ? yrs.join('·') + '년 ' : '') + Object.keys(DATA.holidays.days).length + '일', 'muted');
+  if (dataState.manual) line('임금표는 직접 고친 값을 쓰는 중 (' + dataState.manual.editedAt + ')', 'note');
+  if (dataState.note) line(dataState.note, dataState.noteKind || 'muted');
+  else line(dataState.checkedAt ? '마지막 인터넷 확인: ' + dataState.checkedAt : '아직 인터넷에서 확인하지 않음', 'muted');
+  el('dataNow').textContent = DATA.dataVersion + '판' + (dataState.source === 'remote' ? ' · 인터넷' : '') + (dataState.manual ? ' · 직접 고침' : '');
+  el('updateBtn').disabled = dataState.busy;
+  el('updateBtn').textContent = dataState.busy ? '확인하는 중…' : '인터넷에서 최신 자료 받기';
+}
+/* 임금표 직접 고치기 표 */
+function renderWageEdit() {
+  var body = el('wageEditRows'); if (!body) return;
+  body.innerHTML = '';
+  Object.keys(WAGE_TABLE).forEach(function (k) {
+    var r = WAGE_TABLE[k], orig = DATA.wage.ranks[k] || r;
+    var tr = document.createElement('tr');
+    if (r.base !== orig.base || r.step !== orig.step) tr.className = 'changed';
+    var a = document.createElement('td'); a.textContent = r.name; tr.appendChild(a);
+    ['base', 'step'].forEach(function (f) {
+      var td = document.createElement('td');
+      var inp = document.createElement('input'); inp.type = 'text'; inp.inputMode = 'numeric'; inp.autocomplete = 'off';
+      inp.value = comma(r[f]); inp.setAttribute('data-rank', k); inp.setAttribute('data-f', f); inp.setAttribute('aria-label', r.name + ' ' + (f === 'base' ? '통상임금' : '호봉 단가'));
+      inp.addEventListener('blur', function () { var n = parseWon(inp.value); if (n) inp.value = comma(n); });
+      td.appendChild(inp); tr.appendChild(td);
+    });
+    body.appendChild(tr);
+  });
+  el('maxStepIn').value = String(MAX_STEP);
+  el('wageEditHint').textContent = dataState.manual ? '직접 고친 값 (' + dataState.manual.editedAt + ')' : '';
+}
+function saveWageEdit() {
+  var ranks = {}, bad = [];
+  Object.keys(DATA.wage.ranks).forEach(function (k) {
+    var orig = DATA.wage.ranks[k];
+    var bi = el('wageEditRows').querySelector('input[data-rank="' + k + '"][data-f="base"]');
+    var si = el('wageEditRows').querySelector('input[data-rank="' + k + '"][data-f="step"]');
+    var base = parseWon(bi && bi.value), step = Number(String(si && si.value || '').replace(/[^\d]/g, ''));
+    if (!(base > 0)) bad.push(orig.name + ' 통상임금');
+    if (!isFinite(step) || step < 0) bad.push(orig.name + ' 호봉 단가');
+    ranks[k] = { name: orig.name, base: base, step: step };
+  });
+  var ms = Math.floor(Number(el('maxStepIn').value));
+  if (!(ms >= 0 && ms <= 60)) bad.push('최대 호봉(0~60)');
+  if (bad.length) { el('wageEditHint').textContent = '확인해 주세요: ' + bad.join(', '); return; }
+  var same = ms === DATA.wage.maxStep && Object.keys(ranks).every(function (k) { return ranks[k].base === DATA.wage.ranks[k].base && ranks[k].step === DATA.wage.ranks[k].step; });
+  dataState.manual = same ? null : { ranks: ranks, maxStep: ms, baseVersion: DATA.dataVersion, editedAt: nowStamp() };
+  applyData(DATA); writeStore(); refreshAfterData(); renderDataStatus();
+  el('wageEditHint').textContent = same ? '자료와 같은 값이라 직접 고친 것으로 두지 않았습니다.' : '저장했습니다 (' + dataState.manual.editedAt + ').';
+}
+function revertWageEdit() {
+  dataState.manual = null;
+  applyData(DATA); writeStore(); refreshAfterData(); renderDataStatus();
+  el('wageEditHint').textContent = '자료 파일의 임금표로 되돌렸습니다.';
+}
+
+/* ---------- 화면 ---------- */
+var KEY = 'seafarer-leave-calc.v3';
+var OLD_KEYS = ['seafarer-leave-calc.v2', 'seafarer-leave-calc.v1'];
+var DEFAULTS = { perMonth: '10', method: 'prorata', rounding: 'ceil', inclusive: true, addRed: true, sundays: true, compOn: true, years: '',
+                 rateUnused: '170' };
+var METHOD_LABEL = { prorata: '일할', total: '총일수÷30', floor: '끝수 버림', ceil: '끝수 1개월' };
+var ROUND_LABEL = { d1: '소수1', d2: '소수2', round: '정수 반올림', ceil: '정수 올림', floor: '정수 버림' };
+var FIELDS = ['son', 'soff', 'leaveStart', 'eduDays', 'rank', 'step', 'wage', 'nextOn', 'perMonth', 'method', 'rounding', 'inclusive', 'compOn', 'years',
+              'rateUnused', 'addRed', 'sundays', 'custom'];
+var wageManual = false;   /* 통상임금을 직접 고쳤는지 */
+var CHECKS = { inclusive: 1, addRed: 1, sundays: 1, compOn: 1 };
+
+function todayDn() { var t = new Date(); return dn(t.getFullYear(), t.getMonth(), t.getDate()); }
+function el(id) { return document.getElementById(id); }
+
+function readForm() {
+  var v = { todayDn: todayDn() };
+  FIELDS.forEach(function (id) { v[id] = CHECKS[id] ? el(id).checked : el(id).value; });
+  return v;
+}
+function save(v) {
+  try { var o = {}; FIELDS.forEach(function (id) { o[id] = v[id]; }); o.wageManual = wageManual; localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) {}
+}
+function load() {
+  try {
+    var raw = localStorage.getItem(KEY);
+    if (raw) return JSON.parse(raw);
+    for (var i = 0; i < OLD_KEYS.length; i++) {        /* 이전 판: 날짜·직접 넣은 공휴일만 가져오고 기준은 새 기본값 */
+      var old = localStorage.getItem(OLD_KEYS[i]);
+      if (old) { old = JSON.parse(old); return { son: old.son, soff: old.soff, leaveStart: old.leaveStart, custom: old.custom }; }
+    }
+  } catch (e) {}
+  return null;
+}
+
+var lastCopy = '';
+
+function render() {
+  var v = readForm();
+  save(v);
+  var cust = parseCustom(v.custom);
+  var r = calculate(v);
+  el('settingsNow').textContent = fmtNum(Number(v.perMonth) || 0) + '일/월 · ' + METHOD_LABEL[v.method] + ' · ' + ROUND_LABEL[v.rounding] +
+    (v.compOn ? ' · 보상휴가' : '') + (v.addRed ? ' · 빨간날 추가' : '');
+  el('offHint').textContent = v.soff ? '하선 예정이면 미래 날짜도 됩니다' : '비워 두면 오늘(' + fmtDate(v.todayDn) + ')까지로 계산';
+
+  var err = el('error');
+  if (r.error) {
+    err.textContent = r.error; err.hidden = false;
+    el('leave').textContent = '–'; el('spanMonths').textContent = '–'; el('spanTotal').textContent = '';
+    el('formula').textContent = '–'; el('status').textContent = '';
+    el('trackWrap').hidden = true; el('facts').hidden = true; el('copyBtn').disabled = true;
+    el('leaveCard').hidden = true; el('payCard').hidden = true;
+    lastCopy = '';
+    return;
+  }
+  err.hidden = true;
+  el('trackWrap').hidden = false; el('facts').hidden = false; el('copyBtn').disabled = false;
+  el('leaveCard').hidden = false; el('payCard').hidden = false;
+
+  var p = r.period;
+  el('leave').textContent = r.leaveText;
+  el('spanMonths').textContent = p.months + '개월 ' + p.rem + '일';
+  el('spanTotal').textContent = '총 ' + p.total + '일';
+  el('formula').textContent = r.formula;
+
+  var st;
+  if (!r.offGiven) st = '하선일을 비워서 오늘(' + fmtDate(r.offDn) + ')까지 쌓인 일수입니다.';
+  else if (r.offDn > v.todayDn) st = '하선 예정일 기준 예상 일수입니다.';
+  else st = fmtDate(r.sDn) + ' ~ ' + fmtDate(r.offDn) + (v.inclusive ? ' (양일 포함)' : ' (하선일 제외)');
+  el('status').textContent = st;
+
+  el('fourDate').textContent = fmtDate(r.fourDn);
+  var chip = el('fourChip');
+  if (r.endDn >= r.fourDn) { chip.textContent = '발생'; chip.className = 'chip done'; }
+  else { chip.textContent = (r.fourDn - r.endDn) + '일 남음'; chip.className = 'chip wait'; }
+  el('deadline').textContent = fmtDate(r.deadlineDn);
+  el('sixDate').textContent = fmtDate(r.sixDn);
+  var six = el('sixChip');
+  if (!r.compOn) { six.textContent = '적용 안 함'; six.className = 'chip wait'; }
+  else if (r.comp > 0) { six.textContent = '보상휴가 +' + r.comp + '일'; six.className = 'chip done'; }
+  else if (r.endDn >= r.sixDn) { six.textContent = '7개월째 끝나면 +1일'; six.className = 'chip wait'; }
+  else { six.textContent = (r.sixDn - r.endDn) + '일 남음'; six.className = 'chip wait'; }
+
+  /* 승무 띠 */
+  var M = Math.max(12, p.months + (p.rem > 0 ? 1 : 0));
+  var scale = monthEnd(r.s, M) - r.sDn + 1;
+  el('fill').style.width = Math.min(100, p.total / scale * 100) + '%';
+  var track = el('track');
+  track.querySelectorAll('.tick').forEach(function (t) { t.remove(); });
+  var ticks = el('ticks'); ticks.innerHTML = '';
+  var every = M <= 12 ? 1 : (M <= 24 ? 2 : Math.ceil(M / 12));
+  for (var k = 1; k <= M; k++) {
+    var pos = (monthEnd(r.s, k) - r.sDn + 1) / scale * 100;
+    var mark = k === 4 ? ' four' : (k === 6 ? ' six' : '');
+    if (k < M) {
+      var t = document.createElement('div');
+      t.className = 'tick' + mark;
+      t.style.left = pos + '%';
+      track.appendChild(t);
+    }
+    if (k % every === 0 || k === 4 || k === 6) {
+      var lab = document.createElement('span');
+      lab.textContent = k;
+      if (mark) lab.className = mark.trim();
+      lab.style.left = pos + '%';
+      ticks.appendChild(lab);
+    }
+  }
+
+  /* 휴가 기간 */
+  var autoStart = r.offDn + 1;
+  var startDn = ymdDn(v.leaveStart);
+  var startAuto = startDn === null;
+  if (startAuto) startDn = autoStart;
+  el('startHint').textContent = startAuto
+    ? (r.offGiven ? '하선 다음 날로 자동 설정' : '오늘 하선한다고 보고 내일로 자동 설정')
+    : '직접 넣은 날짜 ("자동"을 누르면 하선 다음 날)';
+  var opts = { addRed: v.addRed, sundays: v.sundays, custom: cust.map };
+  var L = leavePeriod(startDn, r.leave, opts, v.eduDays);
+  renderLeave(L, v, opts, cust, startDn);
+  var P = renderPay(r, L, v, opts);
+
+  lastCopy = '승선 ' + fmtDate(r.sDn) + ' ~ ' + (r.offGiven ? '하선 ' : '오늘 ') + fmtDate(r.offDn) +
+    ' | 승선기간 ' + p.months + '개월 ' + p.rem + '일 (총 ' + p.total + '일)' +
+    ' | 유급휴가 ' + r.leaveText + '일 (' + r.formula.replace(/\s{2,}/g, ' ') + ')' +
+    (L.whole > 0 ? ' | 휴가 ' + fmtDate(L.start) + ' ~ ' + fmtDate(L.end) + ' (휴가 ' + L.whole + '일' +
+      (L.edu ? ' + 교육 ' + L.edu + '일' : '') +
+      (L.reds.length ? ' + 빨간날 ' + L.reds.length + '일' : '') + ' = ' + L.calendarDays + '일)' : '') +
+    (P && P.pd.next != null ? ' | 차기 승선 ' + fmtDate(P.pd.next) + ' · 조기승선 수당 ' + comma(P.amount) + '원 (' +
+      (P.ow.manual ? '통상임금 직접 입력 ' : P.ow.name + ' ' + P.ow.step + '호봉 ') + comma(P.ow.used) + '원, 남은 휴가 ' +
+      fmtNum(P.pd.mode === 'within' || P.pd.mode === 'before' ? P.pd.unused : 0) + '일)' : '');
+  el('copyFallback').value = lastCopy;
+}
+
+function renderPay(r, L, v, opts) {
+  var nextDn = ymdDn(v.nextOn);
+  var pd = payDays(r.leave, L, nextDn, opts);
+  var ow = ordinaryWage(v.rank, v.step);
+  /* 통상임금: 직접 고쳤으면 그 금액, 아니면 임금표 금액 */
+  var wage = wageManual ? parseWon(v.wage) : ow.wage;
+  if (!wageManual && v.wage !== comma(ow.wage)) el('wage').value = comma(ow.wage);
+  ow.used = wage; ow.manual = wageManual;
+  var wh = el('wageHint');
+  wh.textContent = wageManual ? '직접 고친 금액 (임금표: ' + comma(ow.wage) + '원)' : '임금표 금액 · 직접 고칠 수 있음';
+  wh.className = 'hint' + (wageManual ? ' manual' : '');
+  el('resetWage').hidden = !wageManual;
+  var rate = v.rateUnused === '' ? 0 : Math.max(0, Number(v.rateUnused) || 0);
+  var early = pd.mode === 'within' || pd.mode === 'before';
+  var amount = earlyAllowance(wage, pd, rate);
+
+  el('stepHint').textContent = ow.name + ' 호봉 1개당 ' + comma(ow.unit) + '원 (0~' + MAX_STEP + '호봉)';
+  el('payTotal').textContent = nextDn == null ? '차기 승선일을 넣으세요' : (wage ? comma(amount) + '원' : '통상임금을 넣으세요');
+  el('payTotalLabel').textContent = nextDn != null ? fmtDate(nextDn) + ' 승선 시 조기승선 수당 (세전)' : '조기승선 수당 (세전)';
+
+  var st, hint = '휴가 중에 승선하면 남은 휴가만큼 수당';
+  if (!(L.whole > 0)) st = '쓸 수 있는 휴가가 1일이 안 됩니다.';
+  else if (pd.mode === 'full') st = '차기 승선일을 넣으면 그날 승선할 때 받는 수당이 나옵니다. 지금 휴가는 ' + fmtNum(r.leave) + '일, 마지막 날 ' + fmtDateW(L.end) + '.';
+  else if (pd.mode === 'before') { st = '휴가 시작일(' + fmtDate(L.start) + ') 전에 승선해서 휴가 ' + fmtNum(r.leave) + '일을 하나도 못 씁니다. ' + fmtNum(pd.unused) + '일분을 받습니다.'; hint = '휴가 시작 전 승선'; }
+  else if (pd.mode === 'within') { st = fmtDateW(nextDn) + ' 승선이면 휴가 ' + fmtNum(pd.used) + '일을 쓰고 ' + fmtNum(pd.unused) + '일이 남아서, 남은 ' + fmtNum(pd.unused) + '일분을 받습니다.'; hint = '휴가 중 승선 · 남은 휴가 ' + fmtNum(pd.unused) + '일'; }
+  else if (pd.wait === 0) { st = '휴가 ' + fmtNum(r.leave) + '일을 다 쓰고(마지막 날 ' + fmtDateW(L.end) + ') 다음 날 승선해서 조기승선 수당은 없습니다.'; hint = '휴가 다 쓰고 승선'; }
+  else { st = '휴가가 ' + fmtDateW(L.end) + '에 끝난 뒤 승선해서 조기승선 수당은 없습니다 (승선 전까지 ' + pd.wait + '일).'; hint = '휴가 끝난 뒤 승선'; }
+  el('payStatus').textContent = st;
+  el('nextHint').textContent = hint;
+  var W = comma(wage);
+
+  var body = el('payRows'); body.innerHTML = '';
+  function row(label, sub, calc, money, cls) {
+    var tr = document.createElement('tr'); if (cls) tr.className = cls;
+    var a = document.createElement('td'); a.textContent = label;
+    if (sub) { var s = document.createElement('span'); s.className = 'sub'; s.textContent = sub; a.appendChild(s); }
+    var b = document.createElement('td'); b.className = 'calc'; b.textContent = calc;
+    var c = document.createElement('td'); c.className = 'amt'; c.textContent = money;
+    tr.appendChild(a); tr.appendChild(b); tr.appendChild(c); body.appendChild(tr);
+  }
+  if (wageManual)
+    row('통상임금', '직접 입력', '임금표 ' + ow.name + ' ' + ow.step + '호봉은 ' + comma(ow.wage) + '원', W + '원');
+  else
+    row('통상임금', ow.name + ' ' + ow.step + '호봉',
+        comma(ow.base) + (ow.step ? ' + ' + comma(ow.unit) + ' × ' + ow.step + '호봉' : ' (호봉 가산 없음)'), W + '원');
+  if (nextDn != null && L.whole > 0) {
+    var usedTxt = pd.mode === 'before' ? '승선 전까지 쓴 휴가 0일' :
+      '승선 전까지 쓴 ' + fmtNum(pd.used) + '일' + (pd.reds ? ' (빨간날 ' + pd.reds + '일 제외)' : '') + (pd.edu ? ' (교육 ' + pd.edu + '일 제외)' : '');
+    row('남은 휴가', early ? '' : '휴가 다 씀', early ? '휴가 ' + fmtNum(r.leave) + '일 − ' + usedTxt : '휴가 ' + fmtNum(r.leave) + '일을 모두 씀', (early ? fmtNum(pd.unused) : '0') + '일');
+    row('조기승선 수당', '', early ? W + ' × ' + fmtNum(rate) + '% ÷ 30 × ' + fmtNum(pd.unused) + '일' : '남은 휴가가 없음', comma(amount) + '원', 'total-row');
+  } else {
+    row('조기승선 수당', '', '차기 승선일을 넣으면 계산', '–', 'total-row');
+  }
+
+  return { pd: pd, ow: ow, amount: amount };
+}
+
+/* 호봉 목록: 직책에 맞춰 통상임금을 옆에 보여 줌 */
+function fillSteps(rank) {
+  var sel = el('step'), cur = sel.value || '0';
+  var w = rankOf(rank);
+  if (sel.options.length !== MAX_STEP + 1) {
+    sel.innerHTML = '';
+    for (var i = 0; i <= MAX_STEP; i++) { var o = document.createElement('option'); o.value = String(i); sel.appendChild(o); }
+  }
+  for (var k = 0; k <= MAX_STEP; k++) {
+    sel.options[k].textContent = k + '호봉 · ' + comma(w.base + w.step * k) + '원';
+  }
+  sel.value = cur;
+  if (sel.value === '') sel.value = String(Math.min(MAX_STEP, Math.max(0, Math.floor(Number(cur) || 0))));
+}
+
+function renderLeave(L, v, opts, cust, startDn) {
+  var warn = el('leaveWarn'), msgs = [];
+  if (cust.bad.length) msgs.push('날짜로 읽지 못한 줄: ' + cust.bad.join(', ') + ' (예: 2027-06-03 임시공휴일)');
+  if (L.whole <= 0) {
+    el('leaveEnd').textContent = '–';
+    el('leaveEndSub').textContent = '';
+    el('leaveSum').textContent = '쓸 수 있는 휴가가 1일이 안 됩니다 (' + fmtNum(L.frac) + '일).';
+    el('holiList').innerHTML = ''; el('cal').innerHTML = '';
+    warn.textContent = msgs.join(' / '); warn.hidden = !msgs.length;
+    return;
+  }
+  if (L.missingYears.length && v.addRed) msgs.push(L.missingYears.join('·') + '년 공휴일은 자료에 없어 ' + (v.sundays ? '일요일만' : '아무 날도') + ' 반영했습니다. 그해 공휴일은 계산 기준의 "임시공휴일 직접 추가"에 넣으세요.');
+  warn.textContent = msgs.join(' / '); warn.hidden = !msgs.length;
+
+  el('leaveEnd').textContent = fmtDateW(L.end);
+  el('leaveEndSub').textContent = fmtDate(L.start) + '부터 달력 ' + L.calendarDays + '일';
+
+  var sum = el('leaveSum'); sum.innerHTML = '';
+  function add(text, cls) { var s = document.createElement('span'); s.textContent = text; if (cls) s.className = cls; sum.appendChild(s); }
+  add('휴가 ' + L.whole + '일');
+  if (L.edu) add('+ 교육 ' + L.edu + '일');
+  if (v.addRed) {
+    add('+ 빨간날 ' + L.reds.length + '일', 'red');
+    var bits = [];
+    if (opts.sundays) bits.push('일요일 ' + L.sundayCount);
+    bits.push('공휴일 ' + L.holidays.length);
+    add('(' + bits.join(' · ') + ')', 'muted');
+  }
+  add('= 달력 ' + L.calendarDays + '일');
+  if (L.frac > 0) add('남는 ' + fmtNum(L.frac) + '일은 날짜에 넣지 않음', 'muted');
+
+  var hl = el('holiList'); hl.innerHTML = '';
+  L.holidays.forEach(function (h) {
+    var c = document.createElement('span'); c.className = 'holi';
+    var b = document.createElement('b'); b.textContent = fmtMD(h.dn);
+    c.appendChild(b); c.appendChild(document.createTextNode(h.name));
+    hl.appendChild(c);
+  });
+  if (v.addRed && opts.sundays && L.sundayCount) {
+    var s = document.createElement('span'); s.className = 'holi sun';
+    s.textContent = '일요일 ' + L.sundayCount + '일';
+    hl.appendChild(s);
+  }
+
+  /* 달력 (차기 승선일이 휴가 뒤면 그 달까지) */
+  var cal = el('cal'); cal.innerHTML = '';
+  var nextDn = ymdDn(v.nextOn);
+  var lastShow = (nextDn != null && nextDn > L.end && nextDn - L.end <= 400) ? nextDn : L.end;
+  var a = fromDn(L.start), z = fromDn(lastShow);
+  el('legendNext').hidden = !(nextDn != null && nextDn >= dn(a.y, a.m, 1) && nextDn <= lastShow);
+  var y = a.y, m = a.m, guard = 0;
+  while ((y < z.y || (y === z.y && m <= z.m)) && guard < 60) {
+    var box = document.createElement('div'); box.className = 'month';
+    var h = document.createElement('h3'); h.textContent = y + '.' + pad(m + 1); box.appendChild(h);
+    var grid = document.createElement('div'); grid.className = 'days';
+    WD.forEach(function (w, i) { var c = document.createElement('div'); c.className = 'wd' + (i === 0 ? ' sun' : ''); c.textContent = w; grid.appendChild(c); });
+    var first = dn(y, m, 1), off = fromDn(first).w;
+    for (var i = 0; i < off; i++) grid.appendChild(document.createElement('div'));
+    for (var d = 1; d <= dim(y, m); d++) {
+      var n = dn(y, m, d);
+      var cell = document.createElement('div');
+      var red = redInfo(n, { sundays: true, custom: opts.custom });
+      var on = n >= L.start && n <= L.end;
+      cell.className = 'd' + (on ? ' on' : '') + (red && (opts.sundays || red.holiday) ? ' red' : '') + (n === L.start || n === L.end ? ' edge' : '') + (n === nextDn ? ' next' : '');
+      if (n === nextDn) cell.title = '차기 승선일';
+      cell.textContent = d;
+      if (red && red.holiday) cell.title = red.name;
+      grid.appendChild(cell);
+    }
+    box.appendChild(grid); cal.appendChild(box);
+    m++; if (m > 11) { m = 0; y++; } guard++;
+  }
+}
+
+function init() {
+  initData();           /* 임금표·공휴일 자료 고르기 (기본 → 앱 내장 → 받아 둔 자료) */
+  fillRanks();
+  fillSteps(el('rank').value);
+  var stored = load();
+  if (stored) {
+    FIELDS.forEach(function (id) {
+      if (stored[id] === undefined) return;
+      if (CHECKS[id]) { if (typeof stored[id] === 'boolean') el(id).checked = stored[id]; }
+      else el(id).value = stored[id];
+    });
+    if (!el('rank').value) el('rank').value = WAGE_TABLE.third ? 'third' : Object.keys(WAGE_TABLE)[0];
+    wageManual = stored.wageManual === true && parseWon(stored.wage) > 0;
+    if (wageManual) el('wage').value = comma(parseWon(stored.wage));
+  }
+  fillSteps(el('rank').value);
+  /* 직책·호봉을 바꾸면 통상임금은 임금표 금액으로 */
+  el('rank').addEventListener('change', function () { fillSteps(el('rank').value); wageManual = false; render(); });
+  el('step').addEventListener('change', function () { wageManual = false; render(); });
+  el('wage').addEventListener('input', function () {
+    var n = parseWon(el('wage').value);
+    wageManual = n !== ordinaryWage(el('rank').value, el('step').value).wage;
+    render();
+  });
+  el('wage').addEventListener('blur', function () { var n = parseWon(el('wage').value); if (n) el('wage').value = comma(n); });
+  el('resetWage').addEventListener('click', function () { wageManual = false; render(); });
+  FIELDS.forEach(function (id) {
+    el(id).addEventListener('input', render);
+    el(id).addEventListener('change', render);
+  });
+  el('clearOff').addEventListener('click', function () { el('soff').value = ''; render(); el('soff').focus(); });
+  el('clearStart').addEventListener('click', function () { el('leaveStart').value = ''; render(); });
+  el('clearNext').addEventListener('click', function () { el('nextOn').value = ''; render(); el('nextOn').focus(); });
+  el('resetBtn').addEventListener('click', function () {
+    el('perMonth').value = DEFAULTS.perMonth; el('method').value = DEFAULTS.method;
+    el('rounding').value = DEFAULTS.rounding; el('inclusive').checked = DEFAULTS.inclusive;
+    el('addRed').checked = DEFAULTS.addRed; el('sundays').checked = DEFAULTS.sundays;
+    el('compOn').checked = DEFAULTS.compOn; el('years').value = DEFAULTS.years;
+    el('rateUnused').value = DEFAULTS.rateUnused;
+    render();
+  });
+  el('copyBtn').addEventListener('click', function () {
+    var btn = el('copyBtn'), fb = el('copyFallback');
+    if (!lastCopy) return;
+    function fallback() {
+      fb.hidden = false; fb.value = lastCopy; fb.focus(); fb.select();
+      btn.textContent = '아래 글을 선택해 복사하세요';
+    }
+    try {
+      navigator.clipboard.writeText(lastCopy).then(function () {
+        btn.textContent = '복사됨'; fb.hidden = true;
+        setTimeout(function () { btn.textContent = '결과 복사'; }, 1600);
+      }, fallback);
+    } catch (e) { fallback(); }
+  });
+  el('updateBtn').addEventListener('click', function () { fetchRemote(true); });
+  el('wageSave').addEventListener('click', saveWageEdit);
+  el('wageRevert').addEventListener('click', revertWageEdit);
+  refreshAfterData();   /* 직책·호봉 목록, 안내 문구, 계산 */
+  renderDataStatus();
+  fetchRemote(false);   /* 인터넷이 되면 조용히 최신 자료 확인 */
+}
+if (typeof document !== 'undefined') init();
+</script>
+</body></html>
