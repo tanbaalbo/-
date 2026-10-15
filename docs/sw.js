@@ -1,8 +1,9 @@
-/* 선원 유급휴가 계산기 — 오프라인용 서비스 워커 (판: f047a11efd)
-   - 계산기 페이지: 인터넷이 되면 새로 받고(4초 안에 안 오면 저장본), 안 되면 저장본
-   - 아이콘·manifest: 저장본 먼저
-   - 다른 사이트(GitHub 자료 파일, 글꼴)는 건드리지 않음 */
-var CACHE = 'leave-calc-f047a11efd';
+/* 선원 유급휴가 계산기 — 오프라인용 서비스 워커 (판: d63f1ecd64)
+   - 계산기·아이콘: 저장본을 바로 줌 (인터넷을 기다리지 않음). 새 판은 sw.js가 바뀌면 설치되고, 페이지가 "새 판 준비됨" 띠를 보여 줌
+   - 글꼴(fonts.googleapis.com·fonts.gstatic.com): 저장본 있으면 저장본, 없으면 5초만 기다려 받고 저장
+   - GitHub 자료 파일(raw.githubusercontent.com) 등 나머지는 건드리지 않음 */
+var CACHE = 'leave-calc-d63f1ecd64';
+var FONTS = 'leave-calc-fonts-v1';
 var FILES = ['./', 'index.html', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 
 self.addEventListener('install', function (e) {
@@ -10,7 +11,7 @@ self.addEventListener('install', function (e) {
 });
 self.addEventListener('activate', function (e) {
   e.waitUntil(caches.keys().then(function (keys) {
-    return Promise.all(keys.filter(function (k) { return k !== CACHE; }).map(function (k) { return caches.delete(k); }));
+    return Promise.all(keys.filter(function (k) { return k !== CACHE && k !== FONTS; }).map(function (k) { return caches.delete(k); }));
   }).then(function () { return self.clients.claim(); }));
 });
 function withTimeout(p, ms) {
@@ -23,25 +24,27 @@ self.addEventListener('fetch', function (e) {
   var req = e.request;
   if (req.method !== 'GET') return;
   var url = new URL(req.url);
-  if (url.origin !== self.location.origin) return;            /* 바깥 사이트는 그대로 */
-  var isPage = req.mode === 'navigate' || url.pathname.endsWith('/') || url.pathname.endsWith('/index.html');
-  if (isPage) {
-    e.respondWith(
-      withTimeout(fetch(req), 4000).then(function (res) {
-        if (res && res.ok) { var copy = res.clone(); caches.open(CACHE).then(function (c) { c.put('index.html', copy); }); }
-        return res;
-      }).catch(function () {
-        return caches.match('index.html').then(function (hit) { return hit || caches.match('./'); });
-      })
-    );
+  if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
+    e.respondWith(caches.open(FONTS).then(function (c) {
+      return c.match(req).then(function (hit) {
+        if (hit) return hit;
+        return withTimeout(fetch(req), 5000).then(function (res) {
+          if (res && (res.ok || res.type === 'opaque')) c.put(req, res.clone());
+          return res;
+        }).catch(function () { return Response.error(); });
+      });
+    }));
     return;
   }
+  if (url.origin !== self.location.origin) return;
+  var isPage = req.mode === 'navigate' || url.pathname.endsWith('/') || url.pathname.endsWith('/index.html') || url.pathname.endsWith('/404.html');
   e.respondWith(
-    caches.match(req).then(function (hit) {
-      return hit || fetch(req).then(function (res) {
-        if (res && res.ok) { var copy = res.clone(); caches.open(CACHE).then(function (c) { c.put(req, copy); }); }
+    caches.match(isPage ? 'index.html' : req).then(function (hit) {
+      if (hit) return hit;
+      return fetch(req).then(function (res) {
+        if (res && res.ok) { var copy = res.clone(); caches.open(CACHE).then(function (c) { c.put(isPage ? 'index.html' : req, copy); }); }
         return res;
-      });
+      }).catch(function () { return isPage ? caches.match('./') : Response.error(); });
     })
   );
 });

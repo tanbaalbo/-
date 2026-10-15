@@ -1,7 +1,9 @@
 <title>선원 유급휴가 계산기</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap">
+<!-- 글꼴은 화면을 막지 않고 뒤에서 받음: 인터넷이 느리거나 없어도 계산기는 바로 뜸 (그동안은 기기 글꼴) -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap"></noscript>
 <style>
 /* Layout: 한 장짜리 계산 카드 — 위에 승선·하선일, 가운데 결과(얕은 물 색 패널), 휴가 달력, 아래 계산 기준 */
 :root {
@@ -884,9 +886,12 @@ function fetchRemote(byUser) {
     return;
   }
   try {
-    fetch(DATA_URL, { cache: 'no-store' })
+    var ac = typeof AbortController === 'function' ? new AbortController() : null;        /* 10초 넘게 안 오면 포기 (배 인터넷이 느릴 때 버튼이 계속 잠기지 않게) */
+    var timer = ac ? setTimeout(function () { ac.abort(); }, 10000) : null;
+    fetch(DATA_URL, ac ? { cache: 'no-store', signal: ac.signal } : { cache: 'no-store' })
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
-      .then(onDataFetched, function (e) { onDataFetchFailed(e && e.message ? e.message : String(e)); });
+      .then(function (t) { if (timer) clearTimeout(timer); onDataFetched(t); },
+            function (e) { if (timer) clearTimeout(timer); onDataFetchFailed(e && e.name === 'AbortError' ? '응답 없음' : (e && e.message ? e.message : String(e))); });
   } catch (e) { onDataFetchFailed(String(e)); }
 }
 function onDataFetched(text) {

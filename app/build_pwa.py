@@ -32,11 +32,25 @@ HEAD = '''<!doctype html><html lang="ko"><head><meta charset="utf-8">
 </style>
 </head><body>'''
 TAIL = '''
+<div id="swUpdate" hidden style="position:fixed;left:16px;right:16px;bottom:16px;z-index:9;display:flex;gap:10px;align-items:center;justify-content:space-between;padding:12px 14px;border-radius:10px;background:#13233A;color:#fff;font-size:14px;box-shadow:0 6px 20px rgba(0,0,0,.25)">
+  <span>새 판이 준비됐어요.</span>
+  <button type="button" id="swReload" style="font:inherit;font-weight:600;padding:6px 12px;border-radius:8px;border:0;background:#fff;color:#13233A">새로고침</button>
+</div>
 <script>
-/* 오프라인용 서비스 워커 등록 (한 번 열어 두면 인터넷 없이도 열림) */
+/* 오프라인용 서비스 워커: 저장해 둔 계산기를 먼저 띄우고(즉시), 인터넷이 되면 뒤에서 새 판을 받아 둠 */
 if ('serviceWorker' in navigator) {
+  var hadController = !!navigator.serviceWorker.controller;   /* 이미 설치된 상태에서 열었는지 */
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (!hadController) return;                                 /* 처음 설치는 알림 없음 */
+    var bar = document.getElementById('swUpdate'); if (bar) bar.hidden = false;
+  });
+  var reload = document.getElementById('swReload');
+  if (reload) reload.addEventListener('click', function () { location.reload(); });
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js').catch(function () {});
+    navigator.serviceWorker.register('sw.js').then(function (reg) {
+      try { reg.update(); } catch (e) {}
+      window.addEventListener('online', function () { try { reg.update(); } catch (e) {} });
+    }).catch(function () {});
   });
 }
 </script>
@@ -65,10 +79,11 @@ manifest = {
 open(os.path.join(DOCS, 'manifest.webmanifest'), 'w', encoding='utf8').write(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n')
 
 SW = '''/* 선원 유급휴가 계산기 — 오프라인용 서비스 워커 (판: __VER__)
-   - 계산기 페이지: 인터넷이 되면 새로 받고(4초 안에 안 오면 저장본), 안 되면 저장본
-   - 아이콘·manifest: 저장본 먼저
-   - 다른 사이트(GitHub 자료 파일, 글꼴)는 건드리지 않음 */
+   - 계산기·아이콘: 저장본을 바로 줌 (인터넷을 기다리지 않음). 새 판은 sw.js가 바뀌면 설치되고, 페이지가 "새 판 준비됨" 띠를 보여 줌
+   - 글꼴(fonts.googleapis.com·fonts.gstatic.com): 저장본 있으면 저장본, 없으면 5초만 기다려 받고 저장
+   - GitHub 자료 파일(raw.githubusercontent.com) 등 나머지는 건드리지 않음 */
 var CACHE = 'leave-calc-__VER__';
+var FONTS = 'leave-calc-fonts-v1';
 var FILES = ['./', 'index.html', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 
 self.addEventListener('install', function (e) {
@@ -76,7 +91,7 @@ self.addEventListener('install', function (e) {
 });
 self.addEventListener('activate', function (e) {
   e.waitUntil(caches.keys().then(function (keys) {
-    return Promise.all(keys.filter(function (k) { return k !== CACHE; }).map(function (k) { return caches.delete(k); }));
+    return Promise.all(keys.filter(function (k) { return k !== CACHE && k !== FONTS; }).map(function (k) { return caches.delete(k); }));
   }).then(function () { return self.clients.claim(); }));
 });
 function withTimeout(p, ms) {
@@ -89,25 +104,27 @@ self.addEventListener('fetch', function (e) {
   var req = e.request;
   if (req.method !== 'GET') return;
   var url = new URL(req.url);
-  if (url.origin !== self.location.origin) return;            /* 바깥 사이트는 그대로 */
-  var isPage = req.mode === 'navigate' || url.pathname.endsWith('/') || url.pathname.endsWith('/index.html');
-  if (isPage) {
-    e.respondWith(
-      withTimeout(fetch(req), 4000).then(function (res) {
-        if (res && res.ok) { var copy = res.clone(); caches.open(CACHE).then(function (c) { c.put('index.html', copy); }); }
-        return res;
-      }).catch(function () {
-        return caches.match('index.html').then(function (hit) { return hit || caches.match('./'); });
-      })
-    );
+  if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
+    e.respondWith(caches.open(FONTS).then(function (c) {
+      return c.match(req).then(function (hit) {
+        if (hit) return hit;
+        return withTimeout(fetch(req), 5000).then(function (res) {
+          if (res && (res.ok || res.type === 'opaque')) c.put(req, res.clone());
+          return res;
+        }).catch(function () { return Response.error(); });
+      });
+    }));
     return;
   }
+  if (url.origin !== self.location.origin) return;
+  var isPage = req.mode === 'navigate' || url.pathname.endsWith('/') || url.pathname.endsWith('/index.html') || url.pathname.endsWith('/404.html');
   e.respondWith(
-    caches.match(req).then(function (hit) {
-      return hit || fetch(req).then(function (res) {
-        if (res && res.ok) { var copy = res.clone(); caches.open(CACHE).then(function (c) { c.put(req, copy); }); }
+    caches.match(isPage ? 'index.html' : req).then(function (hit) {
+      if (hit) return hit;
+      return fetch(req).then(function (res) {
+        if (res && res.ok) { var copy = res.clone(); caches.open(CACHE).then(function (c) { c.put(isPage ? 'index.html' : req, copy); }); }
         return res;
-      });
+      }).catch(function () { return isPage ? caches.match('./') : Response.error(); });
     })
   );
 });

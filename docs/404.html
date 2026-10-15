@@ -15,7 +15,9 @@
 </head><body><title>선원 유급휴가 계산기</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap">
+<!-- 글꼴은 화면을 막지 않고 뒤에서 받음: 인터넷이 느리거나 없어도 계산기는 바로 뜸 (그동안은 기기 글꼴) -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap"></noscript>
 <style>
 /* Layout: 한 장짜리 계산 카드 — 위에 승선·하선일, 가운데 결과(얕은 물 색 패널), 휴가 달력, 아래 계산 기준 */
 :root {
@@ -898,9 +900,12 @@ function fetchRemote(byUser) {
     return;
   }
   try {
-    fetch(DATA_URL, { cache: 'no-store' })
+    var ac = typeof AbortController === 'function' ? new AbortController() : null;        /* 10초 넘게 안 오면 포기 (배 인터넷이 느릴 때 버튼이 계속 잠기지 않게) */
+    var timer = ac ? setTimeout(function () { ac.abort(); }, 10000) : null;
+    fetch(DATA_URL, ac ? { cache: 'no-store', signal: ac.signal } : { cache: 'no-store' })
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
-      .then(onDataFetched, function (e) { onDataFetchFailed(e && e.message ? e.message : String(e)); });
+      .then(function (t) { if (timer) clearTimeout(timer); onDataFetched(t); },
+            function (e) { if (timer) clearTimeout(timer); onDataFetchFailed(e && e.name === 'AbortError' ? '응답 없음' : (e && e.message ? e.message : String(e))); });
   } catch (e) { onDataFetchFailed(String(e)); }
 }
 function onDataFetched(text) {
@@ -1410,11 +1415,25 @@ function init() {
 if (typeof document !== 'undefined') init();
 </script>
 
+<div id="swUpdate" hidden style="position:fixed;left:16px;right:16px;bottom:16px;z-index:9;display:flex;gap:10px;align-items:center;justify-content:space-between;padding:12px 14px;border-radius:10px;background:#13233A;color:#fff;font-size:14px;box-shadow:0 6px 20px rgba(0,0,0,.25)">
+  <span>새 판이 준비됐어요.</span>
+  <button type="button" id="swReload" style="font:inherit;font-weight:600;padding:6px 12px;border-radius:8px;border:0;background:#fff;color:#13233A">새로고침</button>
+</div>
 <script>
-/* 오프라인용 서비스 워커 등록 (한 번 열어 두면 인터넷 없이도 열림) */
+/* 오프라인용 서비스 워커: 저장해 둔 계산기를 먼저 띄우고(즉시), 인터넷이 되면 뒤에서 새 판을 받아 둠 */
 if ('serviceWorker' in navigator) {
+  var hadController = !!navigator.serviceWorker.controller;   /* 이미 설치된 상태에서 열었는지 */
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (!hadController) return;                                 /* 처음 설치는 알림 없음 */
+    var bar = document.getElementById('swUpdate'); if (bar) bar.hidden = false;
+  });
+  var reload = document.getElementById('swReload');
+  if (reload) reload.addEventListener('click', function () { location.reload(); });
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js').catch(function () {});
+    navigator.serviceWorker.register('sw.js').then(function (reg) {
+      try { reg.update(); } catch (e) {}
+      window.addEventListener('online', function () { try { reg.update(); } catch (e) {} });
+    }).catch(function () {});
   });
 }
 </script>
